@@ -61,8 +61,8 @@ describe("PlannerForm layout", () => {
   it("renders every Income & Expenses field including the new ones", () => {
     render(<Host />);
     const fs = screen.getByText("Income & Expenses").closest("fieldset")!;
-    expect(within(fs).getByLabelText("Salary")).toBeInTheDocument();
-    expect(within(fs).getByLabelText("Rental Income")).toBeInTheDocument();
+    expect(within(fs).getByLabelText("Annual Salary")).toBeInTheDocument();
+    expect(within(fs).getByLabelText("Annual Rental Income")).toBeInTheDocument();
     expect(within(fs).getByText("Rental income annual appreciation")).toBeInTheDocument();
     expect(within(fs).getByLabelText("Windfall amount")).toBeInTheDocument();
     expect(within(fs).getByLabelText("Windfall year")).toBeInTheDocument();

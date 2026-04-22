@@ -115,7 +115,7 @@ const DEBT_AMOUNTS: AmountSpec[] = [
 ];
 
 const INCOME_EXPENSE_AMOUNTS: AmountSpec[] = [
-  { key: "annualIncome", label: "Salary", min: 0, max: 10_000_000 }
+  { key: "annualIncome", label: "Annual Salary", min: 0, max: 10_000_000 }
 ];
 
 const REAL_ESTATE_AMOUNTS: AmountSpec[] = [
@@ -200,7 +200,7 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
           <legend className="eyebrow px-1 text-[var(--navy)]">Income &amp; Expenses</legend>
           {renderAmounts(INCOME_EXPENSE_AMOUNTS)}
           <CurrencyField
-            label="Rental Income"
+            label="Annual Rental Income"
             value={value.rentalIncome}
             onChange={(next) => update("rentalIncome", next)}
             min={0}
