@@ -19,7 +19,11 @@ jobs:
           cache: npm
 
       - name: Install
-        run: npm ci --include=optional
+        # Intentionally `npm install` (not `npm ci`): the lockfile is generated on
+        # macOS and omits the Linux rolldown binding that vite/vitest need on the
+        # Ubuntu runner, so we let npm re-resolve platform-appropriate optional
+        # deps here.
+        run: npm install --no-audit --no-fund
 
       - name: Lint
         run: npm run lint
