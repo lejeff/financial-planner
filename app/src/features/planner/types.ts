@@ -10,6 +10,7 @@ export type PlanInputs = {
   windfallAmount: number;
   windfallYear: number;
   nominalReturn: number;
+  inflationRate: number;
   horizonYears: number;
   cashBalance: number;
   nonLiquidInvestments: number;
@@ -38,6 +39,7 @@ export const DEFAULT_PLAN_INPUTS: PlanInputs = {
   windfallAmount: 0,
   windfallYear: new Date().getFullYear() + 10,
   nominalReturn: 0.06,
+  inflationRate: 0.02,
   horizonYears: 30,
   cashBalance: 20_000,
   nonLiquidInvestments: 0,

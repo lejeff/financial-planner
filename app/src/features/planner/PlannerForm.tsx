@@ -18,6 +18,7 @@ type Props = {
 
 type SliderKey =
   | "nominalReturn"
+  | "inflationRate"
   | "horizonYears"
   | "primaryResidenceRate"
   | "otherPropertyRate"
@@ -68,6 +69,15 @@ const OTHER_PROPERTY_RATE_SLIDER: SliderSpec = {
   min: MIN_APPRECIATION,
   max: MAX_APPRECIATION,
   step: 0.005,
+  format: percent
+};
+
+const INFLATION_SLIDER: SliderSpec = {
+  key: "inflationRate",
+  label: "Inflation",
+  min: 0,
+  max: 0.08,
+  step: 0.0025,
   format: percent
 };
 
@@ -271,7 +281,12 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
           />
         </fieldset>
 
-        <div className="pt-2">
+        <div className="space-y-4 pt-2">
+          <SliderRow
+            spec={INFLATION_SLIDER}
+            value={value.inflationRate}
+            onChange={(next) => update("inflationRate", next)}
+          />
           <SliderRow
             spec={HORIZON_SLIDER}
             value={value.horizonYears}

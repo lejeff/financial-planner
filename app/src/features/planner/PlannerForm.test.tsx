@@ -83,6 +83,12 @@ describe("PlannerForm layout", () => {
     expect(horizonLabel.closest("fieldset")).toBeNull();
   });
 
+  it("renders the Inflation slider outside all three categories", () => {
+    render(<Host />);
+    const inflationLabel = screen.getByText("Inflation");
+    expect(inflationLabel.closest("fieldset")).toBeNull();
+  });
+
   it("no longer renders the Name field on the planner page", () => {
     render(<Host />);
     expect(screen.queryByLabelText("Name")).toBeNull();
