@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { CashPositionChart } from "./CashPositionChart";
 import { PlannerForm } from "./PlannerForm";
 import { ProjectionChart } from "./ProjectionChart";
 import { ageFromDob, deflateToToday, projectNetWorth } from "./calculator";
@@ -44,6 +45,11 @@ export function PlannerPage() {
   const netWorthTrend =
     finalPoint && finalPoint.netWorth >= (inputs.startAssets - inputs.startDebt) ? "up" : "down";
 
+  // Surface the earliest point where liquid assets (portfolio + cash) turn
+  // negative, so we can warn the user that non-liquid or real-estate assets
+  // would have to be sold to cover the shortfall from that year onward.
+  const firstNegativeLiquid = displayed.find((p) => p.liquid < 0) ?? null;
+
   return (
     <main className="mx-auto max-w-6xl px-6 pb-16">
       <section className="mb-8 grid gap-4 sm:grid-cols-3">
@@ -68,19 +74,69 @@ export function PlannerPage() {
             onReset={() => setInputs(DEFAULT_PLAN_INPUTS)}
           />
         </div>
-        <div className="card p-6 md:p-7">
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-display text-xl text-[var(--navy)]">Projected net worth</h2>
-            <ViewModeToggle value={viewMode} onChange={setViewMode} />
+        <div className="space-y-6">
+          <div className="card p-6 md:p-7">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-display text-xl text-[var(--navy)]">Projected net worth</h2>
+              <ViewModeToggle value={viewMode} onChange={setViewMode} />
+            </div>
+            <ProjectionChart data={displayed} />
+            <div className="mt-4 flex items-center gap-5 text-xs text-[var(--ink-soft)]">
+              <LegendSwatch color="var(--teal)" label="Positive" />
+              <LegendSwatch color="var(--coral)" label="Negative" />
+            </div>
           </div>
-          <ProjectionChart data={displayed} />
-          <div className="mt-4 flex items-center gap-5 text-xs text-[var(--ink-soft)]">
-            <LegendSwatch color="var(--teal)" label="Positive" />
-            <LegendSwatch color="var(--coral)" label="Negative" />
+          <div className="card p-6 md:p-7">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-display text-xl text-[var(--navy)]">Liquid position</h2>
+              <span className="eyebrow">Portfolio + Cash</span>
+            </div>
+            <CashPositionChart data={displayed} />
+            <div className="mt-4 flex items-center gap-5 text-xs text-[var(--ink-soft)]">
+              <LegendSwatch color="var(--teal)" label="Positive" />
+              <LegendSwatch color="var(--coral)" label="Shortfall" />
+            </div>
+            {firstNegativeLiquid ? (
+              <LiquidityWarning
+                year={firstNegativeLiquid.year}
+                age={firstNegativeLiquid.age}
+                shortfallLabel={format(firstNegativeLiquid.liquid)}
+              />
+            ) : null}
           </div>
         </div>
       </section>
     </main>
+  );
+}
+
+function LiquidityWarning({
+  year,
+  age,
+  shortfallLabel
+}: {
+  year: number;
+  age: number;
+  shortfallLabel: string;
+}) {
+  return (
+    <div
+      role="alert"
+      className="mt-5 rounded-xl border border-[var(--coral)]/40 bg-[var(--coral)]/10 p-4"
+    >
+      <div
+        className="eyebrow"
+        style={{ color: "var(--coral)" }}
+      >
+        Liquidity warning
+      </div>
+      <p className="mt-1 text-sm leading-relaxed text-[var(--navy)]">
+        Your liquid position goes negative in <strong>{year}</strong> (age {age}) at{" "}
+        <strong className="tabular-nums">{shortfallLabel}</strong>. You may need to sell
+        other assets — non-liquid investments or real estate — to cover the shortfall from
+        that year onward.
+      </p>
+    </div>
   );
 }
 

@@ -638,10 +638,11 @@ describe("projectNetWorth", () => {
 });
 
 describe("deflateToToday", () => {
-  const mk = (year: number, netWorth: number): ProjectionPoint => ({
+  const mk = (year: number, netWorth: number, liquid = 0): ProjectionPoint => ({
     year,
     age: 40 + (year - 2026),
-    netWorth
+    netWorth,
+    liquid
   });
 
   it("returns the input array untouched when inflationRate is 0", () => {
@@ -672,5 +673,117 @@ describe("deflateToToday", () => {
     const points = [mk(2026, start), mk(2026 + t, nominal)];
     const real = deflateToToday(points, i, 2026);
     money(real[1].netWorth, start);
+  });
+
+  it("deflates the liquid field by the same factor as netWorth", () => {
+    const points: ProjectionPoint[] = [
+      { year: 2026, age: 40, netWorth: 100_000, liquid: 50_000 },
+      { year: 2031, age: 45, netWorth: 200_000, liquid: 75_000 }
+    ];
+    const real = deflateToToday(points, 0.05, 2026);
+    expect(real[0].liquid).toBe(50_000);
+    money(real[1].liquid, 75_000 / 1.05 ** 5);
+    money(real[1].netWorth, 200_000 / 1.05 ** 5);
+  });
+});
+
+describe("projectNetWorth liquid field", () => {
+  it("equals startAssets + cashBalance at year 0", () => {
+    const points = projectNetWorth(
+      { ...BASE_INPUTS, startAssets: 100_000, cashBalance: 25_000 },
+      FIXED_NOW
+    );
+    expect(points[0].liquid).toBe(125_000);
+  });
+
+  it("does not include non-liquid, other fixed, or property in liquid", () => {
+    // Liquid excludes residence, other property, non-liquid investments, other
+    // fixed assets, and debt — only cash + financial portfolio are liquid.
+    const points = projectNetWorth(
+      {
+        ...BASE_INPUTS,
+        startAssets: 50_000,
+        cashBalance: 10_000,
+        nonLiquidInvestments: 999_999,
+        otherFixedAssets: 999_999,
+        primaryResidenceValue: 999_999,
+        otherPropertyValue: 999_999,
+        startDebt: 100_000
+      },
+      FIXED_NOW
+    );
+    expect(points[0].liquid).toBe(60_000);
+  });
+
+  it("drops liquid as cash drains during a shortfall", () => {
+    // Year 1 shortfall = 12_000. Cash 20_000 → 8_000. Assets untouched at 100k.
+    // liquid year 1 = 100_000 + 8_000 = 108_000 (cash drained, assets kept).
+    const points = projectNetWorth(
+      {
+        ...BASE_INPUTS,
+        startAssets: 100_000,
+        cashBalance: 20_000,
+        annualIncome: 0,
+        monthlySpending: 1_000,
+        nominalReturn: 0
+      },
+      FIXED_NOW
+    );
+    expect(points[0].liquid).toBe(120_000);
+    expect(points[1].liquid).toBe(108_000);
+  });
+
+  it("lets liquid go negative once cash is gone and assets are overdrawn", () => {
+    // startAssets 10_000, cashBalance 5_000, spending 2_000/mo, no income, no
+    // return. Year 1 shortfall 24_000 → cash 0, assets 10_000 - 19_000 = -9_000.
+    // liquid = -9_000 + 0 = -9_000.
+    const points = projectNetWorth(
+      {
+        ...BASE_INPUTS,
+        startAssets: 10_000,
+        cashBalance: 5_000,
+        annualIncome: 0,
+        monthlySpending: 2_000,
+        nominalReturn: 0
+      },
+      FIXED_NOW
+    );
+    expect(points[0].liquid).toBe(15_000);
+    expect(points[1].liquid).toBe(-9_000);
+    // Year 2: another 24_000 shortfall, all from assets → -33_000.
+    expect(points[2].liquid).toBe(-33_000);
+  });
+
+  it("grows liquid when the portfolio compounds with no flows", () => {
+    const points = projectNetWorth(
+      {
+        ...BASE_INPUTS,
+        startAssets: 100_000,
+        cashBalance: 0,
+        annualIncome: 0,
+        monthlySpending: 0,
+        nominalReturn: 0.05,
+        inflationRate: 0
+      },
+      FIXED_NOW
+    );
+    money(points[10].liquid, 100_000 * 1.05 ** 10, 0.5);
+  });
+
+  it("keeps liquid flat when cash is the only liquid bucket and nothing moves", () => {
+    const points = projectNetWorth(
+      {
+        ...BASE_INPUTS,
+        startAssets: 0,
+        cashBalance: 50_000,
+        annualIncome: 12_000,
+        monthlySpending: 1_000,
+        nominalReturn: 0,
+        inflationRate: 0
+      },
+      FIXED_NOW
+    );
+    // netFlow = 0 every year; cash stays at 50k, assets stay at 0.
+    for (const p of points) expect(p.liquid).toBe(50_000);
   });
 });

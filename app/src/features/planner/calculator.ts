@@ -73,7 +73,8 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
     points.push({
       year: startYear + i,
       age: currentAge + i,
-      netWorth: residence + otherProp + cash + assets + nonLiquid + otherFixed - debt
+      netWorth: residence + otherProp + cash + assets + nonLiquid + otherFixed - debt,
+      liquid: assets + cash
     });
   }
 
@@ -82,7 +83,7 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
 
 /**
  * Convert a nominal projection to real (today's-money) terms by deflating each
- * point's net worth by (1 + inflationRate) raised to the years-from-start.
+ * point's monetary fields by (1 + inflationRate) raised to the years-from-start.
  */
 export function deflateToToday(
   points: ProjectionPoint[],
@@ -90,8 +91,12 @@ export function deflateToToday(
   startYear: number
 ): ProjectionPoint[] {
   if (inflationRate === 0) return points;
-  return points.map((p) => ({
-    ...p,
-    netWorth: p.netWorth / (1 + inflationRate) ** (p.year - startYear)
-  }));
+  return points.map((p) => {
+    const divisor = (1 + inflationRate) ** (p.year - startYear);
+    return {
+      ...p,
+      netWorth: p.netWorth / divisor,
+      liquid: p.liquid / divisor
+    };
+  });
 }

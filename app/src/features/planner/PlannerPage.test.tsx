@@ -111,6 +111,45 @@ describe("PlannerPage", () => {
     expect(screen.getByText(/· today's money/i)).toBeInTheDocument();
   });
 
+  it("renders the Liquid position chart card with its heading and eyebrow", () => {
+    renderPage();
+    expect(screen.getByText("Liquid position")).toBeInTheDocument();
+    expect(screen.getByText("Portfolio + Cash")).toBeInTheDocument();
+  });
+
+  it("does not render the liquidity warning with the default plan", () => {
+    renderPage();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByText("Liquidity warning")).toBeNull();
+  });
+
+  it("renders the liquidity warning once liquid assets run out", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    // Zero out the portfolio, cash, and salary so spending outpaces income and
+    // the combined liquid position is forced negative within the horizon.
+    const portfolio = screen.getByLabelText("Financial Assets / Portfolio") as HTMLInputElement;
+    await user.clear(portfolio);
+    await user.type(portfolio, "0");
+    await user.tab();
+
+    const cash = screen.getByLabelText("Cash Balance") as HTMLInputElement;
+    await user.clear(cash);
+    await user.type(cash, "0");
+    await user.tab();
+
+    const salary = screen.getByLabelText("Annual Salary") as HTMLInputElement;
+    await user.clear(salary);
+    await user.type(salary, "0");
+    await user.tab();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Liquidity warning");
+    expect(alert).toHaveTextContent(/goes negative/i);
+    expect(alert).toHaveTextContent(/sell other assets/i);
+  });
+
   it("restores defaults when the user clicks Reset", async () => {
     const user = userEvent.setup();
     renderPage();
