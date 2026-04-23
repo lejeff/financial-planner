@@ -44,8 +44,14 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
       otherProp *= 1 + input.otherPropertyRate;
       rental *= 1 + input.rentalIncomeRate;
 
+      // Salary and recurring expenses are entered in today's money but the
+      // projection is nominal, so inflate them to the current year's value.
+      const inflator = (1 + input.inflationRate) ** i;
+      const salaryNominal = input.annualIncome * inflator;
+      const spendingNominal = input.monthlySpending * 12 * inflator;
+
       const afterReturn = assets * (1 + input.nominalReturn);
-      const netFlow = input.annualIncome + rental - input.monthlySpending * 12;
+      const netFlow = salaryNominal + rental - spendingNominal;
 
       if (netFlow >= 0) {
         assets = afterReturn + netFlow;
@@ -58,8 +64,9 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
 
       // One-off windfall lands in the investment portfolio at year-end of the
       // matching calendar year, so it starts compounding from the following year.
+      // The amount is entered in today's money, so inflate it to the landing year.
       if (startYear + i === input.windfallYear && input.windfallAmount > 0) {
-        assets += input.windfallAmount;
+        assets += input.windfallAmount * inflator;
       }
     }
 
@@ -71,4 +78,20 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
   }
 
   return points;
+}
+
+/**
+ * Convert a nominal projection to real (today's-money) terms by deflating each
+ * point's net worth by (1 + inflationRate) raised to the years-from-start.
+ */
+export function deflateToToday(
+  points: ProjectionPoint[],
+  inflationRate: number,
+  startYear: number
+): ProjectionPoint[] {
+  if (inflationRate === 0) return points;
+  return points.map((p) => ({
+    ...p,
+    netWorth: p.netWorth / (1 + inflationRate) ** (p.year - startYear)
+  }));
 }

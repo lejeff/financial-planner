@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   ageFromDob,
   clampHorizon,
+  deflateToToday,
   MAX_HORIZON_YEARS,
   MIN_HORIZON_YEARS,
   projectNetWorth
 } from "@/features/planner/calculator";
-import type { PlanInputs } from "@/features/planner/types";
+import type { PlanInputs, ProjectionPoint } from "@/features/planner/types";
 
 const FIXED_NOW = new Date("2026-06-15T00:00:00Z");
 
@@ -26,6 +27,7 @@ const BASE_INPUTS: PlanInputs = {
   windfallAmount: 0,
   windfallYear: 0,
   nominalReturn: 0.05,
+  inflationRate: 0,
   horizonYears: 30,
   cashBalance: 0,
   nonLiquidInvestments: 0,
@@ -571,5 +573,104 @@ describe("projectNetWorth", () => {
     // Year 2: residence 121k, other 100k, afterReturn 118.8k, shortfall 12k all
     // from assets → 106.8k. NW = 121+100+0+106.8+5+5-50 = 287.8k
     money(points[2].netWorth, 287_800);
+  });
+
+  it("inflates salary and spending when inflationRate > 0", () => {
+    // No return, no existing assets, pure flows. With inflation 2%, year 1
+    // salary is 50_000 * 1.02 and spending is 12_000 * 1.02. netFlow =
+    // 38_000 * 1.02 = 38_760. Without inflation (rate 0) it would be 38_000.
+    const inflated = projectNetWorth(
+      {
+        ...BASE_INPUTS,
+        startAssets: 0,
+        cashBalance: 0,
+        nominalReturn: 0,
+        inflationRate: 0.02
+      },
+      FIXED_NOW
+    );
+    const flat = projectNetWorth(
+      { ...BASE_INPUTS, startAssets: 0, cashBalance: 0, nominalReturn: 0 },
+      FIXED_NOW
+    );
+    money(inflated[1].netWorth, 38_000 * 1.02);
+    money(flat[1].netWorth, 38_000);
+    expect(inflated[1].netWorth).toBeGreaterThan(flat[1].netWorth);
+  });
+
+  it("keeps cash nominally flat regardless of inflation", () => {
+    // Cash is nominal and does not inflate. With no other flows and no return,
+    // netWorth must equal starting cash at every year regardless of inflation.
+    const points = projectNetWorth(
+      {
+        ...BASE_INPUTS,
+        startAssets: 0,
+        cashBalance: 10_000,
+        annualIncome: 0,
+        monthlySpending: 0,
+        nominalReturn: 0,
+        inflationRate: 0.05
+      },
+      FIXED_NOW
+    );
+    for (const p of points) expect(p.netWorth).toBe(10_000);
+  });
+
+  it("inflates the windfall amount to the landing year's nominal value", () => {
+    const inflationRate = 0.05;
+    const points = projectNetWorth(
+      {
+        ...BASE_INPUTS,
+        startAssets: 0,
+        cashBalance: 0,
+        annualIncome: 0,
+        monthlySpending: 0,
+        nominalReturn: 0,
+        inflationRate,
+        windfallAmount: 100_000,
+        windfallYear: FIXED_NOW.getFullYear() + 10
+      },
+      FIXED_NOW
+    );
+    const expected = 100_000 * (1 + inflationRate) ** 10;
+    money(points[10].netWorth, expected, 0.5);
+  });
+});
+
+describe("deflateToToday", () => {
+  const mk = (year: number, netWorth: number): ProjectionPoint => ({
+    year,
+    age: 40 + (year - 2026),
+    netWorth
+  });
+
+  it("returns the input array untouched when inflationRate is 0", () => {
+    const points = [mk(2026, 100_000), mk(2027, 110_000), mk(2028, 121_000)];
+    expect(deflateToToday(points, 0, 2026)).toBe(points);
+  });
+
+  it("leaves the year-0 point unchanged", () => {
+    const points = [mk(2026, 100_000), mk(2027, 110_000)];
+    const result = deflateToToday(points, 0.05, 2026);
+    expect(result[0].netWorth).toBe(100_000);
+    expect(result[0].year).toBe(2026);
+    expect(result[0].age).toBe(points[0].age);
+  });
+
+  it("deflates later points by (1 + i)^t", () => {
+    const points = [mk(2026, 100_000), mk(2027, 110_000), mk(2028, 121_000)];
+    const result = deflateToToday(points, 0.1, 2026);
+    money(result[1].netWorth, 110_000 / 1.1);
+    money(result[2].netWorth, 121_000 / 1.1 ** 2);
+  });
+
+  it("round-trips: inflating then deflating returns the start value", () => {
+    const i = 0.03;
+    const t = 5;
+    const start = 250_000;
+    const nominal = start * (1 + i) ** t;
+    const points = [mk(2026, start), mk(2026 + t, nominal)];
+    const real = deflateToToday(points, i, 2026);
+    money(real[1].netWorth, start);
   });
 });

@@ -77,6 +77,40 @@ describe("PlannerPage", () => {
     expect(numeric).toBeGreaterThan(0);
   });
 
+  it("renders the view-mode toggle with Today's money selected by default", () => {
+    renderPage();
+    const today = screen.getByRole("radio", { name: "Today's money" });
+    const future = screen.getByRole("radio", { name: "Future money" });
+    expect(today).toHaveAttribute("aria-checked", "true");
+    expect(future).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("shows a larger projected net worth when switching to Future money and restores it on switch back", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const readProjected = () => {
+      const card = screen
+        .getByText(/Projected net worth at age/i)
+        .closest("div")!.parentElement!;
+      const text = card.querySelector(".font-display")?.textContent ?? "";
+      return Number(text.replace(/[^\d.-]/g, ""));
+    };
+
+    const real = readProjected();
+
+    await user.click(screen.getByRole("radio", { name: "Future money" }));
+    const nominal = readProjected();
+    expect(nominal).toBeGreaterThan(real);
+    expect(screen.getByText(/· future money/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: "Today's money" }));
+    const realAgain = readProjected();
+    expect(realAgain).toBeLessThan(nominal);
+    expect(realAgain).toBe(real);
+    expect(screen.getByText(/· today's money/i)).toBeInTheDocument();
+  });
+
   it("restores defaults when the user clicks Reset", async () => {
     const user = userEvent.setup();
     renderPage();
