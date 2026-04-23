@@ -1,0 +1,28 @@
+---
+description: Ship workflow for this repo
+alwaysApply: true
+---
+
+# Ship workflow
+
+Before opening a PR or merging, always pause after local checks and ask the
+user to manually test in the dev server. Do NOT commit, push, open a PR, or
+merge until the user has explicitly confirmed they are happy with the result
+(e.g. "ship it", "looks good", "go ahead and merge").
+
+## Sequence
+
+1. Implement the changes on a feature branch.
+2. Run `lint`, `typecheck`, and `test` locally and report results.
+3. Pause. Tell the user exactly what to verify in `npm run dev` — list the
+   specific UI states, inputs, or edge cases that the change should exercise.
+4. Wait for explicit user approval before proceeding.
+5. Only then: commit, push, open a PR, wait for CI green, squash-merge, and
+   clean up local and remote branches.
+
+## Exceptions
+
+If a change is purely mechanical with no runtime impact (pure rename covered
+by tests, typo fix in a comment, dependency bump with all tests passing), call
+that out and ask whether the manual-test pause can be skipped for that change.
+Default is to pause; skipping requires the user's explicit OK each time.
