@@ -49,6 +49,7 @@ export function PlannerPage() {
   // negative, so we can warn the user that non-liquid or real-estate assets
   // would have to be sold to cover the shortfall from that year onward.
   const firstNegativeLiquid = displayed.find((p) => p.liquid < 0) ?? null;
+  const firstNegativeNetWorth = displayed.find((p) => p.netWorth < 0) ?? null;
 
   return (
     <main className="mx-auto max-w-6xl px-6 pb-16">
@@ -81,6 +82,13 @@ export function PlannerPage() {
               <ViewModeToggle value={viewMode} onChange={setViewMode} />
             </div>
             <ProjectionChart data={displayed} />
+            {firstNegativeNetWorth ? (
+              <NetWorthWarning
+                year={firstNegativeNetWorth.year}
+                age={firstNegativeNetWorth.age}
+                shortfallLabel={format(firstNegativeNetWorth.netWorth)}
+              />
+            ) : null}
           </div>
           <div className="card p-6 md:p-7">
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -99,6 +107,36 @@ export function PlannerPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+function NetWorthWarning({
+  year,
+  age,
+  shortfallLabel
+}: {
+  year: number;
+  age: number;
+  shortfallLabel: string;
+}) {
+  return (
+    <div
+      role="alert"
+      className="mt-5 rounded-xl border border-[var(--coral)]/40 bg-[var(--coral)]/10 p-4"
+    >
+      <div
+        className="eyebrow"
+        style={{ color: "var(--coral)" }}
+      >
+        Net worth warning
+      </div>
+      <p className="mt-1 text-sm leading-relaxed text-[var(--navy)]">
+        Your projected net worth goes negative in <strong>{year}</strong> (age {age}) at{" "}
+        <strong className="tabular-nums">{shortfallLabel}</strong>. Your debts exceed your
+        assets from that year onward; consider reducing spending, paying down debt, or
+        extending your earning horizon.
+      </p>
+    </div>
   );
 }
 

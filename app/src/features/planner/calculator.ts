@@ -70,11 +70,18 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
       }
     }
 
+    const savings = assets + cash;
+    const otherAssets = nonLiquid + otherFixed;
+    const realEstate = residence + otherProp;
     points.push({
       year: startYear + i,
       age: currentAge + i,
-      netWorth: residence + otherProp + cash + assets + nonLiquid + otherFixed - debt,
-      liquid: assets + cash
+      netWorth: realEstate + savings + otherAssets - debt,
+      liquid: assets + cash,
+      savings,
+      otherAssets,
+      realEstate,
+      debt
     });
   }
 
@@ -96,7 +103,11 @@ export function deflateToToday(
     return {
       ...p,
       netWorth: p.netWorth / divisor,
-      liquid: p.liquid / divisor
+      liquid: p.liquid / divisor,
+      savings: p.savings / divisor,
+      otherAssets: p.otherAssets / divisor,
+      realEstate: p.realEstate / divisor,
+      debt: p.debt / divisor
     };
   });
 }

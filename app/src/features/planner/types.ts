@@ -26,6 +26,10 @@ export type ProjectionPoint = {
   age: number;
   netWorth: number;
   liquid: number;
+  savings: number;
+  otherAssets: number;
+  realEstate: number;
+  debt: number;
 };
 
 export const DEFAULT_PLAN_INPUTS: PlanInputs = {

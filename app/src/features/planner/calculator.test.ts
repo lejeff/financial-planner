@@ -642,7 +642,11 @@ describe("deflateToToday", () => {
     year,
     age: 40 + (year - 2026),
     netWorth,
-    liquid
+    liquid,
+    savings: 0,
+    otherAssets: 0,
+    realEstate: 0,
+    debt: 0
   });
 
   it("returns the input array untouched when inflationRate is 0", () => {
@@ -677,13 +681,145 @@ describe("deflateToToday", () => {
 
   it("deflates the liquid field by the same factor as netWorth", () => {
     const points: ProjectionPoint[] = [
-      { year: 2026, age: 40, netWorth: 100_000, liquid: 50_000 },
-      { year: 2031, age: 45, netWorth: 200_000, liquid: 75_000 }
+      {
+        year: 2026,
+        age: 40,
+        netWorth: 100_000,
+        liquid: 50_000,
+        savings: 0,
+        otherAssets: 0,
+        realEstate: 0,
+        debt: 0
+      },
+      {
+        year: 2031,
+        age: 45,
+        netWorth: 200_000,
+        liquid: 75_000,
+        savings: 0,
+        otherAssets: 0,
+        realEstate: 0,
+        debt: 0
+      }
     ];
     const real = deflateToToday(points, 0.05, 2026);
     expect(real[0].liquid).toBe(50_000);
     money(real[1].liquid, 75_000 / 1.05 ** 5);
     money(real[1].netWorth, 200_000 / 1.05 ** 5);
+  });
+
+  it("deflates each bucket by the same factor as netWorth", () => {
+    const points: ProjectionPoint[] = [
+      {
+        year: 2026,
+        age: 40,
+        netWorth: 100_000,
+        liquid: 60_000,
+        savings: 60_000,
+        otherAssets: 10_000,
+        realEstate: 50_000,
+        debt: 20_000
+      },
+      {
+        year: 2031,
+        age: 45,
+        netWorth: 200_000,
+        liquid: 80_000,
+        savings: 80_000,
+        otherAssets: 15_000,
+        realEstate: 125_000,
+        debt: 20_000
+      }
+    ];
+    const real = deflateToToday(points, 0.04, 2026);
+    const divisor = 1.04 ** 5;
+    expect(real[0].savings).toBe(60_000);
+    expect(real[0].otherAssets).toBe(10_000);
+    expect(real[0].realEstate).toBe(50_000);
+    expect(real[0].debt).toBe(20_000);
+    money(real[1].savings, 80_000 / divisor);
+    money(real[1].otherAssets, 15_000 / divisor);
+    money(real[1].realEstate, 125_000 / divisor);
+    money(real[1].debt, 20_000 / divisor);
+  });
+});
+
+describe("projectNetWorth bucket fields", () => {
+  it("splits year-0 into the four buckets matching the raw inputs", () => {
+    const points = projectNetWorth(
+      {
+        ...BASE_INPUTS,
+        startAssets: 100_000,
+        cashBalance: 25_000,
+        nonLiquidInvestments: 50_000,
+        otherFixedAssets: 10_000,
+        primaryResidenceValue: 400_000,
+        otherPropertyValue: 150_000,
+        startDebt: 80_000
+      },
+      FIXED_NOW
+    );
+    expect(points[0].savings).toBe(125_000);
+    expect(points[0].otherAssets).toBe(60_000);
+    expect(points[0].realEstate).toBe(550_000);
+    expect(points[0].debt).toBe(80_000);
+  });
+
+  it("keeps savings + otherAssets + realEstate - debt equal to netWorth at every point", () => {
+    const points = projectNetWorth(
+      {
+        ...BASE_INPUTS,
+        startAssets: 100_000,
+        cashBalance: 10_000,
+        nonLiquidInvestments: 5_000,
+        otherFixedAssets: 5_000,
+        primaryResidenceValue: 100_000,
+        primaryResidenceRate: 0.05,
+        otherPropertyValue: 50_000,
+        otherPropertyRate: 0.02,
+        startDebt: 40_000,
+        monthlySpending: 1_500,
+        nominalReturn: 0.04
+      },
+      FIXED_NOW
+    );
+    for (const p of points) {
+      money(p.savings + p.otherAssets + p.realEstate - p.debt, p.netWorth);
+    }
+  });
+
+  it("compounds real estate independently at its own rates", () => {
+    const points = projectNetWorth(
+      {
+        ...BASE_INPUTS,
+        startAssets: 0,
+        cashBalance: 0,
+        annualIncome: 0,
+        monthlySpending: 0,
+        primaryResidenceValue: 200_000,
+        primaryResidenceRate: 0.03,
+        otherPropertyValue: 100_000,
+        otherPropertyRate: 0.05
+      },
+      FIXED_NOW
+    );
+    money(points[10].realEstate, 200_000 * 1.03 ** 10 + 100_000 * 1.05 ** 10, 0.5);
+  });
+
+  it("holds otherAssets and debt flat across all years", () => {
+    const points = projectNetWorth(
+      {
+        ...BASE_INPUTS,
+        nonLiquidInvestments: 75_000,
+        otherFixedAssets: 25_000,
+        startDebt: 60_000
+      },
+      FIXED_NOW
+    );
+    for (const p of points) {
+      expect(p.otherAssets).toBe(100_000);
+      expect(p.debt).toBe(60_000);
+    }
   });
 });
 

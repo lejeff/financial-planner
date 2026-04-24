@@ -147,7 +147,9 @@ describe("PlannerPage", () => {
     await user.type(salary, "0");
     await user.tab();
 
-    const alert = await screen.findByRole("alert");
+    const liquidityHeading = await screen.findByText("Liquidity warning");
+    const alert = liquidityHeading.closest('[role="alert"]');
+    expect(alert).not.toBeNull();
     expect(alert).toHaveTextContent("Liquidity warning");
     expect(alert).toHaveTextContent(/goes negative/i);
     expect(alert).toHaveTextContent(/sell other assets/i);
