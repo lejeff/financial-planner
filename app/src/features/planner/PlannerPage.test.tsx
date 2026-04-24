@@ -139,6 +139,9 @@ describe("PlannerPage", () => {
     await user.type(cash, "0");
     await user.tab();
 
+    // Income & Expenses is collapsed by default; expand before editing salary.
+    await user.click(screen.getByRole("button", { name: /income & expenses/i }));
+
     const salary = screen.getByLabelText("Annual Salary") as HTMLInputElement;
     await user.clear(salary);
     await user.type(salary, "0");
