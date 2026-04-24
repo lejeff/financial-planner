@@ -1,0 +1,190 @@
+/* Shared stylesheet for both the PDF and the standalone HTML build of
+   docs/architecture.md. Kept intentionally simple: clean typography, good
+   contrast, printable at A4 without surprises. */
+
+:root {
+  --fg: #1a1a1a;
+  --fg-muted: #4b5563;
+  --fg-faint: #6b7280;
+  --bg: #ffffff;
+  --bg-muted: #f4f4f5;
+  --bg-code: #f6f8fa;
+  --border: #e5e7eb;
+  --border-strong: #d1d5db;
+  --accent: #0b5cff;
+  --accent-soft: #e6efff;
+  --ok: #0f766e;
+  --ok-soft: #d1fae5;
+  --warn: #92400e;
+  --warn-soft: #fef3c7;
+  --dim: #475569;
+  --dim-soft: #e2e8f0;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+html, body {
+  color: var(--fg);
+  background: var(--bg);
+  font-family: var(--sans);
+  font-size: 11pt;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+body.architecture-doc {
+  padding: 8px 0 24px;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--sans);
+  color: var(--fg);
+  line-height: 1.25;
+  margin: 1.6em 0 0.5em;
+  page-break-after: avoid;
+}
+
+h1 { font-size: 24pt; border-bottom: 2px solid var(--border); padding-bottom: 0.2em; margin-top: 0.2em; }
+h2 { font-size: 17pt; border-bottom: 1px solid var(--border); padding-bottom: 0.15em; margin-top: 1.8em; }
+h3 { font-size: 13pt; }
+h4 { font-size: 11pt; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+p, li { color: var(--fg); }
+p { margin: 0.6em 0; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  background: var(--bg-code);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+}
+
+pre {
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-size: 9.5pt;
+  line-height: 1.45;
+  page-break-inside: avoid;
+}
+pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: inherit;
+}
+
+blockquote {
+  margin: 0.8em 0;
+  padding: 0.5em 1em;
+  border-left: 3px solid var(--border-strong);
+  color: var(--fg-muted);
+  background: var(--bg-muted);
+  border-radius: 0 4px 4px 0;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 2em 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.8em 0 1.2em;
+  font-size: 10pt;
+  page-break-inside: avoid;
+}
+th, td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+th { background: var(--bg-muted); font-weight: 600; }
+tr:nth-child(even) td { background: #fafafa; }
+
+ul, ol { padding-left: 1.4em; }
+li { margin: 0.2em 0; }
+li > p { margin: 0.25em 0; }
+
+/* Status badges — inline spans authored in markdown with <span class="badge ...">. */
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 9pt;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  vertical-align: 1px;
+  border: 1px solid transparent;
+}
+.badge-active   { background: var(--ok-soft);   color: var(--ok);    border-color: #a7f3d0; }
+.badge-dormant  { background: var(--warn-soft); color: var(--warn);  border-color: #fde68a; }
+.badge-planned  { background: var(--dim-soft);  color: var(--dim);   border-color: #cbd5e1; }
+.badge-info     { background: var(--accent-soft); color: var(--accent); border-color: #bfdbfe; }
+
+/* Mermaid — diagrams are centered and never break across pages. */
+.mermaid, svg[aria-roledescription] {
+  display: block;
+  margin: 1em auto;
+  max-width: 100%;
+  page-break-inside: avoid;
+}
+
+/* Title page-ish treatment for the doc header block. */
+.title-block {
+  text-align: center;
+  padding: 1.2em 0 1.6em;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.6em;
+}
+.title-block .doc-title {
+  font-size: 28pt;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.title-block .doc-sub {
+  font-size: 12pt;
+  color: var(--fg-muted);
+  margin-top: 0.3em;
+}
+.title-block .doc-meta {
+  font-size: 10pt;
+  color: var(--fg-faint);
+  margin-top: 0.6em;
+}
+
+/* Numbered callouts — used for step-by-step sections. */
+.callout {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+  padding: 10px 14px;
+  margin: 0.8em 0;
+  background: #fbfdff;
+  page-break-inside: avoid;
+}
+.callout strong:first-child { color: var(--accent); }
+
+/* Small print footer inside the doc body. */
+.small {
+  font-size: 9.5pt;
+  color: var(--fg-faint);
+}
+
+/* Print-specific tweaks. */
+@media print {
+  h1, h2 { page-break-after: avoid; }
+  table, pre, .mermaid, .callout { page-break-inside: avoid; }
+  a { color: var(--fg); text-decoration: none; }
+}

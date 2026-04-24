@@ -18,6 +18,10 @@ env:
   STRIPE_WEBHOOK_SECRET: whsec_ci_placeholder
   STRIPE_PRICE_ID_PRO: price_ci_placeholder
   RESEND_API_KEY: re_ci_placeholder
+  # Puppeteer is a dev-only dep used by `npm run docs:build` (never runs in
+  # CI). Skipping the Chromium download saves ~200MB per install and a minute
+  # per CI run. Matches the .npmrc in the repo root.
+  PUPPETEER_SKIP_DOWNLOAD: "1"
 
 jobs:
   checks:

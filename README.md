@@ -4,6 +4,8 @@ A browser-based financial planning app: interactive long-horizon net-worth proje
 
 Production deploy: **https://planner.boombaleia.com**
 
+Architecture documentation: see [`docs/architecture.md`](docs/architecture.md) (source), [`docs/architecture.pdf`](docs/architecture.pdf) (print-ready), and [`docs/architecture.html`](docs/architecture.html) (standalone, self-contained HTML with inline diagrams).
+
 ## Stack
 
 - **Next.js 15** (App Router) + TypeScript + Tailwind v4

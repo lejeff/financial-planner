@@ -21,10 +21,14 @@
     "db:diff": "supabase db diff -f",
     "db:push": "supabase db push",
     "db:pull": "supabase db pull",
-    "db:types": "supabase gen types typescript --local > app/src/types/supabase.ts"
+    "db:types": "supabase gen types typescript --local > app/src/types/supabase.ts",
+    "docs:setup": "npx --yes puppeteer browsers install chrome",
+    "docs:build": "node scripts/docs-build.cjs"
   },
   "devDependencies": {
+    "marked": "^18.0.2",
     "prettier": "^3.8.3",
+    "puppeteer": "^24.42.0",
     "supabase": "2.95.1"
   }
 }
