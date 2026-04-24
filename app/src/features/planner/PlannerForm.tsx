@@ -1,5 +1,6 @@
 "use client";
 
+import { useId, useState, type ReactNode } from "react";
 import { CurrencyField } from "./CurrencyField";
 import { FramedField } from "./FramedField";
 import {
@@ -179,11 +180,8 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
           </span>
         </p>
 
-        <fieldset className="space-y-6 rounded-[1.25rem] border border-[var(--border)] bg-[var(--surface)] p-5">
-          <legend className="eyebrow px-1 text-[var(--navy)]">Assets and Debt</legend>
-
-          <div className="space-y-4" data-testid="subsection-liquid">
-            <p className="eyebrow text-[11px] tracking-[0.14em] text-[var(--ink-muted)]">Liquid</p>
+        <CollapsibleCategory title="Assets and Debt" defaultOpen>
+          <CollapsibleSubsection title="Liquid" testId="subsection-liquid" defaultOpen>
             {renderAmounts([LIQUID_AMOUNTS[0]])}
             <SliderRow
               spec={NOMINAL_RETURN_SLIDER}
@@ -191,23 +189,18 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
               onChange={(next) => update("nominalReturn", next)}
             />
             {renderAmounts([LIQUID_AMOUNTS[1]])}
-          </div>
+          </CollapsibleSubsection>
 
-          <div className="space-y-4" data-testid="subsection-non-liquid">
-            <p className="eyebrow text-[11px] tracking-[0.14em] text-[var(--ink-muted)]">
-              Non-Liquid
-            </p>
+          <CollapsibleSubsection title="Non-Liquid" testId="subsection-non-liquid">
             {renderAmounts(NON_LIQUID_AMOUNTS)}
-          </div>
+          </CollapsibleSubsection>
 
-          <div className="space-y-4" data-testid="subsection-debt">
-            <p className="eyebrow text-[11px] tracking-[0.14em] text-[var(--ink-muted)]">Debt</p>
+          <CollapsibleSubsection title="Debt" testId="subsection-debt">
             {renderAmounts(DEBT_AMOUNTS)}
-          </div>
-        </fieldset>
+          </CollapsibleSubsection>
+        </CollapsibleCategory>
 
-        <fieldset className="space-y-4 rounded-[1.25rem] border border-[var(--border)] bg-[var(--surface)] p-5">
-          <legend className="eyebrow px-1 text-[var(--navy)]">Income &amp; Expenses</legend>
+        <CollapsibleCategory title="Income & Expenses">
           {renderAmounts(INCOME_EXPENSE_AMOUNTS)}
           <CurrencyField
             label="Annual Rental Income"
@@ -228,10 +221,9 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
             min={0}
             max={1_000_000}
           />
-        </fieldset>
+        </CollapsibleCategory>
 
-        <fieldset className="space-y-4 rounded-[1.25rem] border border-[var(--border)] bg-[var(--surface)] p-5">
-          <legend className="eyebrow px-1 text-[var(--navy)]">Real Estate</legend>
+        <CollapsibleCategory title="Real Estate">
           <CurrencyField
             label={REAL_ESTATE_AMOUNTS[0].label}
             value={value[REAL_ESTATE_AMOUNTS[0].key]}
@@ -256,10 +248,9 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
             value={value.otherPropertyRate}
             onChange={(next) => update("otherPropertyRate", next)}
           />
-        </fieldset>
+        </CollapsibleCategory>
 
-        <fieldset className="space-y-4 rounded-[1.25rem] border border-[var(--border)] bg-[var(--surface)] p-5">
-          <legend className="eyebrow px-1 text-[var(--navy)]">Life Events</legend>
+        <CollapsibleCategory title="Life Events">
           <CurrencyField
             label="Windfall amount"
             value={value.windfallAmount}
@@ -283,7 +274,7 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
               inputMode="numeric"
             />
           </FramedField>
-        </fieldset>
+        </CollapsibleCategory>
 
         <div className="space-y-4 pt-2">
           <SliderRow
@@ -305,6 +296,89 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
         </button>
       </div>
     </form>
+  );
+}
+
+type CollapsibleProps = {
+  title: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+};
+
+function CollapsibleCategory({ title, defaultOpen = false, children }: CollapsibleProps) {
+  const [open, setOpen] = useState(defaultOpen);
+  const panelId = useId();
+  return (
+    <fieldset className="rounded-[1.25rem] border border-[var(--border)] bg-[var(--surface)] p-5">
+      <legend className="px-1">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-controls={panelId}
+          className="eyebrow flex w-full items-center justify-between gap-3 text-[var(--navy)]"
+        >
+          <span>{title}</span>
+          <Chevron open={open} />
+        </button>
+      </legend>
+      {open ? (
+        <div id={panelId} className="space-y-4 pt-4">
+          {children}
+        </div>
+      ) : null}
+    </fieldset>
+  );
+}
+
+function CollapsibleSubsection({
+  title,
+  defaultOpen = false,
+  testId,
+  children
+}: CollapsibleProps & { testId: string }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const panelId = useId();
+  return (
+    <div className="space-y-3" data-testid={testId}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls={panelId}
+        className="eyebrow flex w-full items-center justify-between gap-3 text-[11px] tracking-[0.14em] text-[var(--ink-muted)]"
+      >
+        <span>{title}</span>
+        <Chevron open={open} small />
+      </button>
+      {open ? (
+        <div id={panelId} className="space-y-4">
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Chevron({ open, small = false }: { open: boolean; small?: boolean }) {
+  const size = small ? 12 : 14;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 20 20"
+      aria-hidden="true"
+      className={"transition-transform duration-150 " + (open ? "rotate-180" : "")}
+    >
+      <path
+        d="M5 7l5 6 5-6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
