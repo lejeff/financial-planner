@@ -76,10 +76,6 @@ export function PlannerPage() {
 
       <section className="grid gap-6 lg:grid-cols-[minmax(0,400px)_1fr] lg:items-start lg:min-h-[200vh]">
         <div className="card p-6 md:p-7">
-          <div className="mb-5 flex items-center justify-between">
-            <h2 className="font-display text-xl text-[var(--navy)]">Your plan</h2>
-            <span className="eyebrow">Inputs</span>
-          </div>
           <PlannerForm
             value={inputs}
             onChange={setInputs}

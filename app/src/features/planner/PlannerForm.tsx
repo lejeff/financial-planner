@@ -155,8 +155,58 @@ const REAL_ESTATE_AMOUNTS: AmountSpec[] = [
 const WINDFALL_YEAR_MIN = 1900;
 const WINDFALL_YEAR_MAX = 2200;
 
+const ACCENT = {
+  aboutYou: "var(--navy-soft)",
+  assetsDebt: "var(--teal)",
+  incomeExpenses: "var(--coral)",
+  realEstate: "var(--gold)",
+  lifeEvents: "var(--violet)",
+  macro: "var(--slate)"
+} as const;
+
+function summarizeAssetsDebt(
+  v: PlanInputs,
+  formatCompact: (n: number) => string
+): string {
+  const net =
+    v.startAssets +
+    v.cashBalance +
+    v.nonLiquidInvestments +
+    v.otherFixedAssets -
+    v.startDebt;
+  return `Net ${formatCompact(net)}`;
+}
+
+function summarizeIncomeExpenses(
+  v: PlanInputs,
+  formatCompact: (n: number) => string
+): string {
+  const annual = v.annualIncome + v.rentalIncome;
+  return `${formatCompact(annual)}/yr income · ${formatCompact(v.monthlySpending)}/mo expenses`;
+}
+
+function summarizeRealEstate(
+  v: PlanInputs,
+  formatCompact: (n: number) => string
+): string {
+  const total = v.primaryResidenceValue + v.otherPropertyValue;
+  return total > 0 ? formatCompact(total) : "—";
+}
+
+function summarizeLifeEvents(
+  v: PlanInputs,
+  formatCompact: (n: number) => string
+): string {
+  if (v.windfallAmount <= 0) return "None scheduled";
+  return `Windfall ${formatCompact(v.windfallAmount)} in ${v.windfallYear}`;
+}
+
+function summarizeMacro(v: PlanInputs): string {
+  return `Inflation ${(v.inflationRate * 100).toFixed(1)}%`;
+}
+
 export function PlannerForm({ value, onChange, onReset }: Props) {
-  const { format } = useCurrency();
+  const { format, formatCompact } = useCurrency();
   const update = <K extends keyof PlanInputs>(key: K, next: PlanInputs[K]) => {
     onChange({ ...value, [key]: next });
   };
@@ -177,35 +227,54 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
   );
 
   return (
-    <form className="space-y-8" onSubmit={(event) => event.preventDefault()}>
-      <fieldset className="space-y-4">
-        <legend className="eyebrow">About you</legend>
-        <FramedField label="Date of birth">
-          <input
-            type="date"
-            value={value.dateOfBirth}
-            onChange={(event) => update("dateOfBirth", event.target.value)}
-            className="field-input"
-            aria-label="Date of birth"
+    <form className="space-y-5" onSubmit={(event) => event.preventDefault()}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display text-xl text-[var(--navy)]">Your plan</h2>
+          <p className="mt-1 text-xs text-[var(--ink-muted)]">Amounts in today&apos;s money</p>
+        </div>
+        <button type="button" onClick={onReset} className="btn-ghost">
+          <ResetIcon />
+          Reset to defaults
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        <CollapsibleCategory
+          title="About you"
+          accent={ACCENT.aboutYou}
+          icon={<IconPerson />}
+          defaultOpen
+        >
+          <FramedField label="Date of birth">
+            <input
+              type="date"
+              value={value.dateOfBirth}
+              onChange={(event) => update("dateOfBirth", event.target.value)}
+              className="field-input"
+              aria-label="Date of birth"
+            />
+          </FramedField>
+          <SliderRow
+            spec={HORIZON_SLIDER}
+            value={value.horizonYears}
+            onChange={(next) => update("horizonYears", next)}
           />
-        </FramedField>
-        <SliderRow
-          spec={HORIZON_SLIDER}
-          value={value.horizonYears}
-          onChange={(next) => update("horizonYears", next)}
-        />
-      </fieldset>
+        </CollapsibleCategory>
 
-      <div className="space-y-4">
-        <p className="eyebrow">
-          Your numbers{" "}
-          <span className="font-normal normal-case tracking-normal text-[var(--ink-muted)]">
-            &middot; in today&apos;s money
-          </span>
-        </p>
-
-        <CollapsibleCategory title="Assets and Debt" defaultOpen>
-          <CollapsibleSubsection title="Liquid" testId="subsection-liquid" defaultOpen>
+        <CollapsibleCategory
+          title="Assets and Debt"
+          accent={ACCENT.assetsDebt}
+          icon={<IconBriefcase />}
+          summary={summarizeAssetsDebt(value, formatCompact)}
+          defaultOpen
+        >
+          <CollapsibleSubsection
+            title="Liquid"
+            accent={ACCENT.assetsDebt}
+            testId="subsection-liquid"
+            defaultOpen
+          >
             {renderAmounts([LIQUID_AMOUNTS[0]])}
             <SliderRow
               spec={NOMINAL_RETURN_SLIDER}
@@ -215,11 +284,19 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
             {renderAmounts([LIQUID_AMOUNTS[1]])}
           </CollapsibleSubsection>
 
-          <CollapsibleSubsection title="Non-Liquid" testId="subsection-non-liquid">
+          <CollapsibleSubsection
+            title="Non-Liquid"
+            accent={ACCENT.assetsDebt}
+            testId="subsection-non-liquid"
+          >
             {renderAmounts(NON_LIQUID_AMOUNTS)}
           </CollapsibleSubsection>
 
-          <CollapsibleSubsection title="Debt" testId="subsection-debt">
+          <CollapsibleSubsection
+            title="Debt"
+            accent={ACCENT.assetsDebt}
+            testId="subsection-debt"
+          >
             {renderAmounts(DEBT_AMOUNTS)}
             <SliderRow
               spec={DEBT_INTEREST_RATE_SLIDER}
@@ -265,7 +342,12 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
           </CollapsibleSubsection>
         </CollapsibleCategory>
 
-        <CollapsibleCategory title="Income & Expenses">
+        <CollapsibleCategory
+          title="Income & Expenses"
+          accent={ACCENT.incomeExpenses}
+          icon={<IconDollar />}
+          summary={summarizeIncomeExpenses(value, formatCompact)}
+        >
           {renderAmounts(INCOME_EXPENSE_AMOUNTS)}
           <CurrencyField
             label="Annual Rental Income"
@@ -288,7 +370,12 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
           />
         </CollapsibleCategory>
 
-        <CollapsibleCategory title="Real Estate">
+        <CollapsibleCategory
+          title="Real Estate"
+          accent={ACCENT.realEstate}
+          icon={<IconHouse />}
+          summary={summarizeRealEstate(value, formatCompact)}
+        >
           <CurrencyField
             label={REAL_ESTATE_AMOUNTS[0].label}
             value={value[REAL_ESTATE_AMOUNTS[0].key]}
@@ -315,7 +402,12 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
           />
         </CollapsibleCategory>
 
-        <CollapsibleCategory title="Life Events">
+        <CollapsibleCategory
+          title="Life Events"
+          accent={ACCENT.lifeEvents}
+          icon={<IconSparkle />}
+          summary={summarizeLifeEvents(value, formatCompact)}
+        >
           <CurrencyField
             label="Windfall amount"
             value={value.windfallAmount}
@@ -341,50 +433,81 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
           </FramedField>
         </CollapsibleCategory>
 
-        <div className="space-y-4 pt-2">
+        <CollapsibleCategory
+          title="Macro assumptions"
+          accent={ACCENT.macro}
+          icon={<IconGauge />}
+          summary={summarizeMacro(value)}
+        >
           <SliderRow
             spec={INFLATION_SLIDER}
             value={value.inflationRate}
             onChange={(next) => update("inflationRate", next)}
           />
-        </div>
-      </div>
-
-      <div className="flex justify-end pt-2">
-        <button type="button" onClick={onReset} className="btn-ghost">
-          Reset to defaults
-        </button>
+        </CollapsibleCategory>
       </div>
     </form>
   );
 }
 
-type CollapsibleProps = {
+type CollapsibleCategoryProps = {
   title: string;
+  accent: string;
+  icon: ReactNode;
+  summary?: string;
   defaultOpen?: boolean;
   children: ReactNode;
 };
 
-function CollapsibleCategory({ title, defaultOpen = false, children }: CollapsibleProps) {
+function CollapsibleCategory({
+  title,
+  accent,
+  icon,
+  summary,
+  defaultOpen = false,
+  children
+}: CollapsibleCategoryProps) {
   const [open, setOpen] = useState(defaultOpen);
   const panelId = useId();
   return (
-    <fieldset className="rounded-[1.25rem] border border-[var(--border)] bg-[var(--surface)] p-5">
+    <fieldset
+      className={`relative rounded-[1.25rem] border bg-[var(--surface)] px-4 md:px-5 ${
+        open ? "py-4 md:py-5" : "pb-3 pt-2 md:pb-4 md:pt-2"
+      }`}
+      style={{ borderColor: accent }}
+    >
       <legend className="px-1">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           aria-controls={panelId}
-          className="eyebrow flex w-full items-center justify-between gap-3 text-[var(--navy)]"
+          className="flex items-center gap-2.5 text-left text-sm font-semibold"
+          style={{ color: accent }}
         >
+          <span aria-hidden className="inline-flex shrink-0">
+            {icon}
+          </span>
           <span>{title}</span>
-          <Chevron open={open} />
         </button>
       </legend>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-hidden="true"
+        tabIndex={-1}
+        className="absolute right-3 top-[-10px] inline-flex items-center bg-[var(--surface)] px-1 leading-none focus:outline-none md:right-4"
+        style={{ color: accent, transform: "translateY(-50%)" }}
+      >
+        <Chevron open={open} />
+      </button>
       {open ? (
-        <div id={panelId} className="space-y-4 pt-4">
+        <div id={panelId} className="space-y-4 pt-2">
           {children}
+        </div>
+      ) : summary ? (
+        <div className="flex items-center pt-1 text-base font-medium tabular-nums text-[var(--ink-muted)]">
+          {summary}
         </div>
       ) : null}
     </fieldset>
@@ -393,20 +516,32 @@ function CollapsibleCategory({ title, defaultOpen = false, children }: Collapsib
 
 function CollapsibleSubsection({
   title,
+  accent,
   defaultOpen = false,
   testId,
   children
-}: CollapsibleProps & { testId: string }) {
+}: {
+  title: string;
+  accent: string;
+  defaultOpen?: boolean;
+  testId: string;
+  children: ReactNode;
+}) {
   const [open, setOpen] = useState(defaultOpen);
   const panelId = useId();
   return (
-    <div className="space-y-3" data-testid={testId}>
+    <div
+      className="space-y-3 border-l pl-3"
+      data-testid={testId}
+      style={{ borderColor: `color-mix(in oklab, ${accent} 40%, transparent)` }}
+    >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls={panelId}
-        className="eyebrow flex w-full items-center justify-between gap-3 text-[11px] tracking-[0.14em] text-[var(--ink-muted)]"
+        className="flex w-full items-center justify-between gap-3 text-[13px] font-medium"
+        style={{ color: accent }}
       >
         <span>{title}</span>
         <Chevron open={open} small />
@@ -428,7 +563,7 @@ function Chevron({ open, small = false }: { open: boolean; small?: boolean }) {
       height={size}
       viewBox="0 0 20 20"
       aria-hidden="true"
-      className={"transition-transform duration-150 " + (open ? "rotate-180" : "")}
+      className={"transition-transform duration-150 " + (open ? "rotate-0" : "-rotate-90")}
     >
       <path
         d="M5 7l5 6 5-6"
@@ -508,5 +643,78 @@ function SliderRow({
         <span>{spec.format(spec.max)}</span>
       </div>
     </div>
+  );
+}
+
+const iconStrokeProps = {
+  fill: "none" as const,
+  stroke: "currentColor",
+  strokeWidth: 1.6,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const
+};
+
+function IconPerson() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 20 20" aria-hidden {...iconStrokeProps}>
+      <circle cx="10" cy="7" r="3" />
+      <path d="M4 17a6 6 0 0 1 12 0" />
+    </svg>
+  );
+}
+
+function IconBriefcase() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 20 20" aria-hidden {...iconStrokeProps}>
+      <rect x="3" y="6" width="14" height="10" rx="1.5" />
+      <path d="M7 6V4.5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 13 4.5V6" />
+      <path d="M3 10h14" />
+    </svg>
+  );
+}
+
+function IconDollar() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 20 20" aria-hidden {...iconStrokeProps}>
+      <circle cx="10" cy="10" r="7" />
+      <path d="M10 5v10" />
+      <path d="M12.5 7.5h-3.5a1.5 1.5 0 0 0 0 3h2a1.5 1.5 0 0 1 0 3H7.5" />
+    </svg>
+  );
+}
+
+function IconHouse() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 20 20" aria-hidden {...iconStrokeProps}>
+      <path d="M3 9.5l7-6 7 6" />
+      <path d="M5 9v7a1 1 0 0 0 1 1h3v-5h2v5h3a1 1 0 0 0 1-1V9" />
+    </svg>
+  );
+}
+
+function IconSparkle() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 20 20" aria-hidden {...iconStrokeProps}>
+      <path d="M10 3l1.6 4.4L16 9l-4.4 1.6L10 15l-1.6-4.4L4 9l4.4-1.6z" />
+    </svg>
+  );
+}
+
+function IconGauge() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 20 20" aria-hidden {...iconStrokeProps}>
+      <path d="M3 14a7 7 0 0 1 14 0" />
+      <path d="M10 14l3.5-3.5" />
+      <circle cx="10" cy="14" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function ResetIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 20 20" aria-hidden {...iconStrokeProps}>
+      <path d="M4 10a6 6 0 1 0 1.8-4.3" />
+      <path d="M4 3v3.5h3.5" />
+    </svg>
   );
 }

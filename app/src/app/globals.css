@@ -17,6 +17,10 @@
   --surface: #ffffff;
   --border: #e6e3da;
   --border-strong: #d8d3c3;
+
+  --gold: #c79a3a;
+  --violet: #8e6fb8;
+  --slate: #6b7c95;
 }
 
 * {

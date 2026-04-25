@@ -29,11 +29,14 @@ afterEach(() => {
 });
 
 describe("PlannerForm layout", () => {
-  it("renders the three top-level category headings", () => {
+  it("renders all top-level category headings", () => {
     render(<Host />);
+    expect(screen.getByText("About you")).toBeInTheDocument();
     expect(screen.getByText("Assets and Debt")).toBeInTheDocument();
     expect(screen.getByText("Income & Expenses")).toBeInTheDocument();
     expect(screen.getByText("Real Estate")).toBeInTheDocument();
+    expect(screen.getByText("Life Events")).toBeInTheDocument();
+    expect(screen.getByText("Macro assumptions")).toBeInTheDocument();
   });
 
   it("no longer renders a 'Financial' category heading", () => {
@@ -108,10 +111,11 @@ describe("PlannerForm layout", () => {
     expect(within(aboutYou).getByLabelText("Date of birth")).toBeInTheDocument();
   });
 
-  it("renders the Inflation slider outside all three categories", () => {
+  it("renders the Inflation slider inside the Macro assumptions category", async () => {
     render(<Host />);
-    const inflationLabel = screen.getByText("Inflation");
-    expect(inflationLabel.closest("fieldset")).toBeNull();
+    await expand(/macro assumptions/i);
+    const macro = screen.getByText("Macro assumptions").closest("fieldset")!;
+    expect(within(macro).getByText("Inflation")).toBeInTheDocument();
   });
 
   it("no longer renders the Name field on the planner page", () => {
@@ -146,8 +150,12 @@ describe("PlannerForm layout", () => {
     expect(onReset).toHaveBeenCalledTimes(1);
   });
 
-  it("starts with Assets and Debt open and the other categories closed", () => {
+  it("starts with About you and Assets and Debt open and the other categories closed", () => {
     render(<Host />);
+    expect(screen.getByRole("button", { name: /about you/i })).toHaveAttribute(
+      "aria-expanded",
+      "true"
+    );
     expect(screen.getByRole("button", { name: /assets and debt/i })).toHaveAttribute(
       "aria-expanded",
       "true"
@@ -161,6 +169,10 @@ describe("PlannerForm layout", () => {
       "false"
     );
     expect(screen.getByRole("button", { name: /life events/i })).toHaveAttribute(
+      "aria-expanded",
+      "false"
+    );
+    expect(screen.getByRole("button", { name: /macro assumptions/i })).toHaveAttribute(
       "aria-expanded",
       "false"
     );
@@ -235,5 +247,54 @@ describe("PlannerForm layout", () => {
     await user.click(btn);
     expect(btn).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByLabelText("Primary Residence value")).toBeNull();
+  });
+
+  it("shows at-a-glance summaries on each collapsed category", () => {
+    render(<Host />);
+    // Income & Expenses, Real Estate, Life Events, and Macro assumptions all
+    // start collapsed, so their summaries should be visible. We avoid
+    // hard-coding the currency symbol because the default depends on the
+    // locale set by CurrencyProvider.
+    expect(
+      screen.getByText(/120K\/yr income · .{1,3}5K\/mo expenses/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/^.{1,3}400K$/)).toBeInTheDocument();
+    expect(screen.getByText("None scheduled")).toBeInTheDocument();
+    expect(screen.getByText(/Inflation 2\.0%/)).toBeInTheDocument();
+  });
+
+  it("hides a category's summary while it is expanded and shows it once collapsed", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    // Assets and Debt starts open, so its 'Net' summary should not be in the DOM.
+    expect(screen.queryByText(/Net .{1,3}220K/)).toBeNull();
+    // Collapse it; the summary should appear in its header row.
+    await user.click(screen.getByRole("button", { name: /assets and debt/i }));
+    expect(screen.getByText(/Net .{1,3}220K/)).toBeInTheDocument();
+  });
+
+  it("updates the Life Events summary when a windfall amount is entered", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    expect(screen.getByText("None scheduled")).toBeInTheDocument();
+
+    await expand(/life events/i);
+    const amount = screen.getByLabelText("Windfall amount") as HTMLInputElement;
+    await user.clear(amount);
+    await user.type(amount, "50000");
+    await user.tab();
+
+    // Collapse Life Events again so the summary is rendered in the header.
+    await user.click(screen.getByRole("button", { name: /life events/i }));
+    expect(screen.getByText(/Windfall .{1,3}50K in/)).toBeInTheDocument();
+    expect(screen.queryByText("None scheduled")).toBeNull();
+  });
+
+  it("renders the Reset button at the top of the form", () => {
+    render(<Host />);
+    const btn = screen.getByRole("button", { name: /reset to defaults/i });
+    // The reset control should not be tucked inside any of the category
+    // fieldsets; it lives in the form's header row.
+    expect(btn.closest("fieldset")).toBeNull();
   });
 });
