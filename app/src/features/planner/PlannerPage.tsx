@@ -74,7 +74,7 @@ export function PlannerPage() {
         <StatCard eyebrow="Projection ends" value={`Age ${endAge}`} hint={`in ${endYear}`} />
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[minmax(0,400px)_1fr]">
+      <section className="grid gap-6 lg:grid-cols-[minmax(0,400px)_1fr] lg:items-start lg:min-h-[200vh]">
         <div className="card p-6 md:p-7">
           <div className="mb-5 flex items-center justify-between">
             <h2 className="font-display text-xl text-[var(--navy)]">Your plan</h2>
@@ -86,7 +86,7 @@ export function PlannerPage() {
             onReset={() => setInputs(DEFAULT_PLAN_INPUTS)}
           />
         </div>
-        <div className="space-y-6">
+        <div className="space-y-6 lg:sticky lg:top-20 lg:self-start">
           <div className="card p-6 md:p-7">
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-display text-xl text-[var(--navy)]">Projected net worth</h2>
