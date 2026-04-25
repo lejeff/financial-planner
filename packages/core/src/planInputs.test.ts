@@ -31,6 +31,21 @@ describe("PlanInputsSchema", () => {
     expect(() => PlanInputsSchema.parse(bad)).toThrow();
   });
 
+  it("rejects an unknown debtRepaymentType", () => {
+    const bad = { ...DEFAULT_PLAN_INPUTS, debtRepaymentType: "monthly" };
+    expect(() => PlanInputsSchema.parse(bad)).toThrow();
+  });
+
+  it("rejects a negative debtInterestRate", () => {
+    const bad = { ...DEFAULT_PLAN_INPUTS, debtInterestRate: -0.01 };
+    expect(() => PlanInputsSchema.parse(bad)).toThrow();
+  });
+
+  it("rejects a debtInterestRate above the max", () => {
+    const bad = { ...DEFAULT_PLAN_INPUTS, debtInterestRate: 0.21 };
+    expect(() => PlanInputsSchema.parse(bad)).toThrow();
+  });
+
   it("strips unknown fields by default (type is a structural superset)", () => {
     // Zod's default behavior is to strip unknown keys, so this is a sanity check
     // that the schema doesn't blow up when legacy localStorage payloads carry

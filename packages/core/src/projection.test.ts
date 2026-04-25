@@ -16,11 +16,19 @@ const money = (actual: number, expected: number, tolerance = 0.01) => {
   expect(Math.abs(actual - expected)).toBeLessThan(tolerance);
 };
 
+// Default debt config = inFine + 0% rate + far-future end year. This makes the
+// debt balance behave as a constant subtraction across the horizon (no
+// payments, no interest), matching the legacy projection behavior so tests
+// that don't care about debt modeling stay valid. Tests that DO exercise the
+// schedule override these fields explicitly.
 const BASE_INPUTS: PlanInputs = {
   name: "Test",
   dateOfBirth: "1990-01-01",
   startAssets: 100_000,
   startDebt: 0,
+  debtInterestRate: 0,
+  debtRepaymentType: "inFine",
+  debtEndYear: 2200,
   monthlySpending: 1_000,
   annualIncome: 50_000,
   rentalIncome: 0,
@@ -600,6 +608,202 @@ describe("projectNetWorth", () => {
     );
     const expected = 100_000 * (1 + inflationRate) ** 10;
     money(points[10].netWorth, expected, 0.5);
+  });
+});
+
+describe("debt modeling", () => {
+  // Tests in this block share a common technique: run the projection twice —
+  // once with the configured `startDebt` and once with `startDebt = 0` — and
+  // compare per-year `liquid`/`savings`. The delta isolates the debt-related
+  // cash outflow each year (since `ProjectionPoint` doesn't expose it).
+  const startYear = FIXED_NOW.getFullYear();
+  const baseDebtScenario: PlanInputs = {
+    ...BASE_INPUTS,
+    cashBalance: 200_000, // plenty so payments come out of cash, never overdraw assets
+    annualIncome: 0,
+    monthlySpending: 0,
+    nominalReturn: 0
+  };
+
+  const runWith = (overrides: Partial<PlanInputs>) =>
+    projectNetWorth({ ...baseDebtScenario, ...overrides }, FIXED_NOW);
+
+  describe("overTime", () => {
+    const P = 100_000;
+    const r = 0.05;
+    const n = 10;
+    const endYear = startYear + n;
+    const cfg: Partial<PlanInputs> = {
+      startDebt: P,
+      debtInterestRate: r,
+      debtRepaymentType: "overTime",
+      debtEndYear: endYear
+    };
+    const expectedAnnualPayment = (P * r) / (1 - (1 + r) ** -n);
+
+    it("monotonically decreases the debt balance to ~0 at debtEndYear", () => {
+      const points = runWith(cfg);
+      for (let i = 1; i <= n; i += 1) {
+        expect(points[i].debt).toBeLessThan(points[i - 1].debt);
+      }
+      money(points[n].debt, 0, 0.01);
+    });
+
+    it("keeps the debt balance at 0 after debtEndYear", () => {
+      const points = runWith(cfg);
+      for (let i = n + 1; i < points.length; i += 1) {
+        expect(points[i].debt).toBe(0);
+      }
+    });
+
+    it("reduces liquid vs. baseline by the cumulative annual payment up to each year", () => {
+      const withDebt = runWith(cfg);
+      const baseline = runWith({ ...cfg, startDebt: 0 });
+      for (let i = 1; i <= n; i += 1) {
+        const expectedCumulative = expectedAnnualPayment * i;
+        money(baseline[i].liquid - withDebt[i].liquid, expectedCumulative, 0.5);
+      }
+    });
+
+    it("total of all payments ~ matches the closed-form annuity (paymentsxn)", () => {
+      const withDebt = runWith(cfg);
+      const baseline = runWith({ ...cfg, startDebt: 0 });
+      const totalPaid = baseline[n].liquid - withDebt[n].liquid;
+      money(totalPaid, expectedAnnualPayment * n, 0.5);
+    });
+
+    it("at r=0, repays principal linearly (P/n per year, no interest)", () => {
+      const points = runWith({ ...cfg, debtInterestRate: 0 });
+      for (let i = 0; i <= n; i += 1) {
+        money(points[i].debt, P - (P / n) * i, 0.01);
+      }
+      const baseline = runWith({ ...cfg, debtInterestRate: 0, startDebt: 0 });
+      for (let i = 1; i <= n; i += 1) {
+        money(baseline[i].liquid - points[i].liquid, (P / n) * i, 0.5);
+      }
+    });
+  });
+
+  describe("inFine", () => {
+    const P = 100_000;
+    const r = 0.05;
+    const n = 10;
+    const endYear = startYear + n;
+    const cfg: Partial<PlanInputs> = {
+      startDebt: P,
+      debtInterestRate: r,
+      debtRepaymentType: "inFine",
+      debtEndYear: endYear
+    };
+
+    it("holds the principal balance flat at P for every year before debtEndYear", () => {
+      const points = runWith(cfg);
+      for (let i = 1; i < n; i += 1) {
+        expect(points[i].debt).toBe(P);
+      }
+    });
+
+    it("makes interest-only payments of exactly P*r every year before debtEndYear", () => {
+      const withDebt = runWith(cfg);
+      const baseline = runWith({ ...cfg, startDebt: 0 });
+      const annualInterest = P * r;
+      for (let i = 1; i < n; i += 1) {
+        const perYearDelta = (baseline[i].liquid - baseline[i - 1].liquid)
+          - (withDebt[i].liquid - withDebt[i - 1].liquid);
+        money(perYearDelta, annualInterest, 0.5);
+      }
+    });
+
+    it("pays interest + lump sum (P*r + P) in debtEndYear and clears the balance", () => {
+      const withDebt = runWith(cfg);
+      const baseline = runWith({ ...cfg, startDebt: 0 });
+      const finalYearOutflow =
+        (baseline[n].liquid - baseline[n - 1].liquid) -
+        (withDebt[n].liquid - withDebt[n - 1].liquid);
+      money(finalYearOutflow, P * r + P, 0.5);
+      expect(withDebt[n].debt).toBe(0);
+    });
+
+    it("plateaus cumulative outflow at P*r*n + P after debtEndYear", () => {
+      const withDebt = runWith(cfg);
+      const baseline = runWith({ ...cfg, startDebt: 0 });
+      const expectedTotal = P * r * n + P;
+      for (let i = n; i < withDebt.length; i += 1) {
+        money(baseline[i].liquid - withDebt[i].liquid, expectedTotal, 0.5);
+        expect(withDebt[i].debt).toBe(0);
+      }
+    });
+
+    it("at r=0, no annual interest and a single lump sum at debtEndYear", () => {
+      const cfg0 = { ...cfg, debtInterestRate: 0 };
+      const withDebt = runWith(cfg0);
+      const baseline = runWith({ ...cfg0, startDebt: 0 });
+      for (let i = 1; i < n; i += 1) {
+        money(baseline[i].liquid - withDebt[i].liquid, 0, 0.01);
+        expect(withDebt[i].debt).toBe(P);
+      }
+      money(baseline[n].liquid - withDebt[n].liquid, P, 0.5);
+      expect(withDebt[n].debt).toBe(0);
+    });
+  });
+
+  describe("edge cases", () => {
+    it("P=0 has no impact for either repayment type", () => {
+      for (const debtRepaymentType of ["overTime", "inFine"] as const) {
+        const points = runWith({
+          startDebt: 0,
+          debtInterestRate: 0.05,
+          debtRepaymentType,
+          debtEndYear: startYear + 10
+        });
+        for (const p of points) {
+          expect(p.debt).toBe(0);
+        }
+        const baseline = runWith({ startDebt: 0 });
+        for (let i = 0; i < points.length; i += 1) {
+          money(points[i].liquid, baseline[i].liquid, 0.01);
+        }
+      }
+    });
+
+    it("debtEndYear <= startYear treats the loan as already settled (balance 0, no flows)", () => {
+      for (const debtEndYear of [startYear, startYear - 5]) {
+        const points = runWith({
+          startDebt: 100_000,
+          debtInterestRate: 0.05,
+          debtRepaymentType: "overTime",
+          debtEndYear
+        });
+        const baseline = runWith({ startDebt: 0 });
+        for (let i = 0; i < points.length; i += 1) {
+          expect(points[i].debt).toBe(0);
+          money(points[i].liquid, baseline[i].liquid, 0.01);
+        }
+      }
+    });
+
+    it("draws debt payments from cash first, then portfolio", () => {
+      // Small cash buffer so the overTime payment fully drains cash within ~2 yrs.
+      const points = projectNetWorth(
+        {
+          ...BASE_INPUTS,
+          startAssets: 1_000_000,
+          cashBalance: 5_000,
+          annualIncome: 0,
+          monthlySpending: 0,
+          nominalReturn: 0,
+          startDebt: 100_000,
+          debtInterestRate: 0,
+          debtRepaymentType: "overTime",
+          debtEndYear: FIXED_NOW.getFullYear() + 10
+        },
+        FIXED_NOW
+      );
+      // year 1: 10_000 payment, cash 5_000 → 0, assets 1_000_000 → 995_000.
+      money(points[1].liquid, 0 + 995_000, 0.5);
+      // year 2: 10_000 payment, cash 0, assets 995_000 → 985_000.
+      money(points[2].liquid, 0 + 985_000, 0.5);
+    });
   });
 });
 
