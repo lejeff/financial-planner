@@ -3,11 +3,16 @@
 import { useId, useState, type ReactNode } from "react";
 import { CurrencyField } from "./CurrencyField";
 import { FramedField } from "./FramedField";
+import { useCurrency } from "@/features/currency/CurrencyContext";
 import {
   MAX_APPRECIATION,
+  MAX_DEBT_INTEREST_RATE,
   MAX_HORIZON_YEARS,
   MIN_APPRECIATION,
+  MIN_DEBT_INTEREST_RATE,
   MIN_HORIZON_YEARS,
+  computeOverTimeAnnualPayment,
+  type DebtRepaymentType,
   type PlanInputs
 } from "@app/core";
 
@@ -23,7 +28,8 @@ type SliderKey =
   | "horizonYears"
   | "primaryResidenceRate"
   | "otherPropertyRate"
-  | "rentalIncomeRate";
+  | "rentalIncomeRate"
+  | "debtInterestRate";
 
 type SliderSpec = {
   key: SliderKey;
@@ -91,6 +97,18 @@ const HORIZON_SLIDER: SliderSpec = {
   format: years
 };
 
+const DEBT_INTEREST_RATE_SLIDER: SliderSpec = {
+  key: "debtInterestRate",
+  label: "Annual interest rate",
+  min: MIN_DEBT_INTEREST_RATE,
+  max: MAX_DEBT_INTEREST_RATE,
+  step: 0.0025,
+  format: percent
+};
+
+const DEBT_END_YEAR_MIN = 1900;
+const DEBT_END_YEAR_MAX = 2200;
+
 type AmountKey =
   | "startAssets"
   | "startDebt"
@@ -138,6 +156,7 @@ const WINDFALL_YEAR_MIN = 1900;
 const WINDFALL_YEAR_MAX = 2200;
 
 export function PlannerForm({ value, onChange, onReset }: Props) {
+  const { format } = useCurrency();
   const update = <K extends keyof PlanInputs>(key: K, next: PlanInputs[K]) => {
     onChange({ ...value, [key]: next });
   };
@@ -197,6 +216,47 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
 
           <CollapsibleSubsection title="Debt" testId="subsection-debt">
             {renderAmounts(DEBT_AMOUNTS)}
+            <SliderRow
+              spec={DEBT_INTEREST_RATE_SLIDER}
+              value={value.debtInterestRate}
+              onChange={(next) => update("debtInterestRate", next)}
+            />
+            <FramedField label="Repayment type">
+              <select
+                value={value.debtRepaymentType}
+                onChange={(event) =>
+                  update("debtRepaymentType", event.target.value as DebtRepaymentType)
+                }
+                className="field-input"
+                aria-label="Repayment type"
+              >
+                <option value="overTime">Over Time</option>
+                <option value="inFine">In Fine</option>
+              </select>
+            </FramedField>
+            <FramedField
+              label={value.debtRepaymentType === "inFine" ? "Lump sum repayment year" : "Loan end year"}
+            >
+              <input
+                type="number"
+                min={DEBT_END_YEAR_MIN}
+                max={DEBT_END_YEAR_MAX}
+                step={1}
+                value={value.debtEndYear}
+                onChange={(event) => {
+                  const parsed = Number(event.target.value);
+                  update("debtEndYear", Number.isFinite(parsed) ? parsed : 0);
+                }}
+                className="field-input"
+                aria-label={
+                  value.debtRepaymentType === "inFine"
+                    ? "Lump sum repayment year"
+                    : "Loan end year"
+                }
+                inputMode="numeric"
+              />
+            </FramedField>
+            <DebtScheduleSummary value={value} format={format} />
           </CollapsibleSubsection>
         </CollapsibleCategory>
 
@@ -379,6 +439,41 @@ function Chevron({ open, small = false }: { open: boolean; small?: boolean }) {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+function DebtScheduleSummary({
+  value,
+  format
+}: {
+  value: PlanInputs;
+  format: (v: number) => string;
+}) {
+  const currentYear = new Date().getFullYear();
+  const remainingTerm = Math.max(0, value.debtEndYear - currentYear);
+  const principal = value.startDebt;
+
+  const text = (() => {
+    if (principal <= 0) return "No outstanding debt.";
+    if (remainingTerm <= 0) return "Loan end year is in the past — no scheduled payments.";
+
+    if (value.debtRepaymentType === "overTime") {
+      const annual = computeOverTimeAnnualPayment(principal, value.debtInterestRate, remainingTerm);
+      const yearsLabel = `${remainingTerm} year${remainingTerm === 1 ? "" : "s"}`;
+      return `Annual repayment (capital + interest): ${format(annual)} for ${yearsLabel}.`;
+    }
+
+    const annualInterest = principal * value.debtInterestRate;
+    return `Annual interest payment: ${format(annualInterest)} · Lump sum of ${format(principal)} in ${value.debtEndYear}.`;
+  })();
+
+  return (
+    <p
+      data-testid="debt-schedule-summary"
+      className="text-xs leading-relaxed text-[var(--ink-muted)]"
+    >
+      {text}
+    </p>
   );
 }
 

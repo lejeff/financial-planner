@@ -181,6 +181,48 @@ describe("PlannerForm layout", () => {
     );
   });
 
+  it("renders the new debt schedule controls inside the Debt subsection", async () => {
+    render(<Host />);
+    await expand(/^debt$/i);
+    const debt = screen.getByTestId("subsection-debt");
+    expect(within(debt).getByLabelText("Debt")).toBeInTheDocument();
+    expect(within(debt).getByText("Annual interest rate")).toBeInTheDocument();
+    expect(within(debt).getByLabelText("Repayment type")).toBeInTheDocument();
+    // The end-year field's label depends on the repayment type; default is overTime.
+    expect(within(debt).getByLabelText("Loan end year")).toBeInTheDocument();
+    expect(within(debt).getByTestId("debt-schedule-summary")).toBeInTheDocument();
+  });
+
+  it("swaps the derived schedule text between Over Time and In Fine modes", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/^debt$/i);
+    const debt = screen.getByTestId("subsection-debt");
+    const summary = within(debt).getByTestId("debt-schedule-summary");
+    expect(summary).toHaveTextContent(/Annual repayment \(capital \+ interest\)/);
+
+    const select = within(debt).getByLabelText("Repayment type") as HTMLSelectElement;
+    await user.selectOptions(select, "inFine");
+    expect(summary).toHaveTextContent(/Annual interest payment/);
+    expect(summary).toHaveTextContent(/Lump sum/);
+    // The end-year field's label should also flip when switching to In Fine.
+    expect(within(debt).getByLabelText("Lump sum repayment year")).toBeInTheDocument();
+  });
+
+  it("shows a no-debt summary when the principal is zero", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/^debt$/i);
+    const debt = screen.getByTestId("subsection-debt");
+    const debtField = within(debt).getByLabelText("Debt") as HTMLInputElement;
+    await user.clear(debtField);
+    await user.type(debtField, "0");
+    await user.tab();
+    expect(within(debt).getByTestId("debt-schedule-summary")).toHaveTextContent(
+      /No outstanding debt/i
+    );
+  });
+
   it("toggles a category open and closed when the header is clicked", async () => {
     const user = userEvent.setup();
     render(<Host />);

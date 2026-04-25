@@ -7,12 +7,24 @@ export const MIN_HORIZON_YEARS = 10;
 export const MAX_HORIZON_YEARS = 80;
 export const MIN_APPRECIATION = -0.05;
 export const MAX_APPRECIATION = 0.1;
+export const MIN_DEBT_INTEREST_RATE = 0;
+export const MAX_DEBT_INTEREST_RATE = 0.2;
+
+export const DEBT_REPAYMENT_TYPES = ["overTime", "inFine"] as const;
+export type DebtRepaymentType = (typeof DEBT_REPAYMENT_TYPES)[number];
 
 export const PlanInputsSchema = z.object({
   name: z.string(),
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "dateOfBirth must be YYYY-MM-DD"),
   startAssets: z.number().finite().nonnegative(),
   startDebt: z.number().finite().nonnegative(),
+  debtInterestRate: z
+    .number()
+    .finite()
+    .min(MIN_DEBT_INTEREST_RATE)
+    .max(MAX_DEBT_INTEREST_RATE),
+  debtRepaymentType: z.enum(DEBT_REPAYMENT_TYPES),
+  debtEndYear: z.number().int(),
   monthlySpending: z.number().finite().nonnegative(),
   annualIncome: z.number().finite().nonnegative(),
   rentalIncome: z.number().finite().nonnegative(),
@@ -49,6 +61,9 @@ export const DEFAULT_PLAN_INPUTS: PlanInputs = {
   dateOfBirth: "1985-01-01",
   startAssets: 250_000,
   startDebt: 50_000,
+  debtInterestRate: 0.05,
+  debtRepaymentType: "overTime",
+  debtEndYear: new Date().getFullYear() + 15,
   monthlySpending: 5_000,
   annualIncome: 120_000,
   rentalIncome: 0,
