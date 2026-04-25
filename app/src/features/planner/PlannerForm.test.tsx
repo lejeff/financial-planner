@@ -101,10 +101,11 @@ describe("PlannerForm layout", () => {
     expect(within(realEstate).getAllByText("Annual appreciation rate")).toHaveLength(2);
   });
 
-  it("keeps the Projection horizon slider outside all three categories", () => {
+  it("renders the Projection horizon slider inside the About you fieldset", () => {
     render(<Host />);
-    const horizonLabel = screen.getByText("Projection horizon");
-    expect(horizonLabel.closest("fieldset")).toBeNull();
+    const aboutYou = screen.getByText("About you").closest("fieldset")!;
+    expect(within(aboutYou).getByText("Projection horizon")).toBeInTheDocument();
+    expect(within(aboutYou).getByLabelText("Date of birth")).toBeInTheDocument();
   });
 
   it("renders the Inflation slider outside all three categories", () => {

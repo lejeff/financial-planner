@@ -189,6 +189,11 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
             aria-label="Date of birth"
           />
         </FramedField>
+        <SliderRow
+          spec={HORIZON_SLIDER}
+          value={value.horizonYears}
+          onChange={(next) => update("horizonYears", next)}
+        />
       </fieldset>
 
       <div className="space-y-4">
@@ -341,11 +346,6 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
             spec={INFLATION_SLIDER}
             value={value.inflationRate}
             onChange={(next) => update("inflationRate", next)}
-          />
-          <SliderRow
-            spec={HORIZON_SLIDER}
-            value={value.horizonYears}
-            onChange={(next) => update("horizonYears", next)}
           />
         </div>
       </div>

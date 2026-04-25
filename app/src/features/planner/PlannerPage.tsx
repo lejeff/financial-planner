@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { CashPositionChart } from "./CashPositionChart";
 import { PlannerForm } from "./PlannerForm";
 import { ProjectionChart } from "./ProjectionChart";
@@ -45,7 +45,7 @@ export function PlannerPage() {
   const endYear = finalPoint?.year ?? new Date().getFullYear();
 
   const finalNetWorthLabel = finalPoint ? format(finalPoint.netWorth) : "—";
-  const basisLabel = viewMode === "real" ? "today's money" : "future money";
+  const basisLabel = viewMode === "real" ? "in today's money" : "in future money";
 
   const netWorthTrend =
     finalPoint && finalPoint.netWorth >= (inputs.startAssets - inputs.startDebt) ? "up" : "down";
@@ -61,7 +61,13 @@ export function PlannerPage() {
       <section className="mb-8 grid gap-4 sm:grid-cols-3">
         <StatCard eyebrow="Current age" value={currentAge.toString()} />
         <StatCard
-          eyebrow={`Projected net worth at age ${endAge} · ${basisLabel}`}
+          eyebrow={
+            <>
+              Projected net worth at age {endAge}
+              <br />
+              {basisLabel}
+            </>
+          }
           value={finalNetWorthLabel}
           accent={netWorthTrend === "up" ? "teal" : "coral"}
         />
@@ -217,7 +223,7 @@ function ViewModeToggle({
 }
 
 type StatCardProps = {
-  eyebrow: string;
+  eyebrow: ReactNode;
   value: string;
   hint?: string;
   accent?: "teal" | "coral" | "none";
@@ -227,14 +233,14 @@ function StatCard({ eyebrow, value, hint, accent = "none" }: StatCardProps) {
   const accentVar =
     accent === "teal" ? "var(--teal)" : accent === "coral" ? "var(--coral)" : "var(--border)";
   return (
-    <div className="card relative overflow-hidden p-5">
+    <div className="card relative flex h-full flex-col overflow-hidden p-5">
       <div
         aria-hidden
         className="absolute inset-x-0 top-0 h-0.5"
         style={{ background: accentVar }}
       />
       <div className="eyebrow">{eyebrow}</div>
-      <div className="mt-2 flex items-baseline gap-2">
+      <div className="mt-auto flex items-baseline gap-2 pt-2">
         <div className="font-display text-3xl text-[var(--navy)]">{value}</div>
         {hint ? <div className="text-sm text-[var(--ink-soft)]">{hint}</div> : null}
       </div>

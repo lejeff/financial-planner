@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CurrencyProvider } from "@/features/currency/CurrencyContext";
@@ -88,10 +88,11 @@ describe("PlannerPage", () => {
     const user = userEvent.setup();
     renderPage();
 
+    const getProjectedCard = () =>
+      screen.getByText(/Projected net worth at age/i).closest("div")!.parentElement!;
+
     const readProjected = () => {
-      const card = screen
-        .getByText(/Projected net worth at age/i)
-        .closest("div")!.parentElement!;
+      const card = getProjectedCard();
       const text = card.querySelector(".font-display")?.textContent ?? "";
       return Number(text.replace(/[^\d.-]/g, ""));
     };
@@ -101,13 +102,13 @@ describe("PlannerPage", () => {
     await user.click(screen.getByRole("radio", { name: "Future money" }));
     const nominal = readProjected();
     expect(nominal).toBeGreaterThan(real);
-    expect(screen.getByText(/· future money/i)).toBeInTheDocument();
+    expect(within(getProjectedCard()).getByText(/in future money/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole("radio", { name: "Today's money" }));
     const realAgain = readProjected();
     expect(realAgain).toBeLessThan(nominal);
     expect(realAgain).toBe(real);
-    expect(screen.getByText(/· today's money/i)).toBeInTheDocument();
+    expect(within(getProjectedCard()).getByText(/in today's money/i)).toBeInTheDocument();
   });
 
   it("renders the Liquid position chart card with its heading and eyebrow", () => {
