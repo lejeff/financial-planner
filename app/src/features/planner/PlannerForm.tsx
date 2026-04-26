@@ -472,7 +472,7 @@ function CollapsibleCategory({
   return (
     <fieldset
       className={`relative rounded-[1.25rem] border bg-[var(--surface)] px-4 md:px-5 ${
-        open ? "py-4 md:py-5" : "pb-3 pt-2 md:pb-4 md:pt-2"
+        open ? "py-3 md:py-4" : "pb-2 pt-1 md:pb-3 md:pt-1"
       }`}
       style={{ borderColor: accent }}
     >
@@ -502,7 +502,7 @@ function CollapsibleCategory({
         <Chevron open={open} />
       </button>
       {open ? (
-        <div id={panelId} className="space-y-4 pt-2">
+        <div id={panelId} className="space-y-3 pt-1">
           {children}
         </div>
       ) : summary ? (
@@ -531,7 +531,7 @@ function CollapsibleSubsection({
   const panelId = useId();
   return (
     <div
-      className="space-y-3 border-l pl-3"
+      className="space-y-4 border-l pl-3"
       data-testid={testId}
       style={{ borderColor: `color-mix(in oklab, ${accent} 40%, transparent)` }}
     >
@@ -547,7 +547,7 @@ function CollapsibleSubsection({
         <Chevron open={open} small />
       </button>
       {open ? (
-        <div id={panelId} className="space-y-4">
+        <div id={panelId} className="space-y-3">
           {children}
         </div>
       ) : null}
