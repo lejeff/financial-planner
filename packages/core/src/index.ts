@@ -1,6 +1,7 @@
 export {
   DEBT_REPAYMENT_TYPES,
   DEFAULT_PLAN_INPUTS,
+  LifeEventSchema,
   MAX_APPRECIATION,
   MAX_DEBT_INTEREST_RATE,
   MAX_HORIZON_YEARS,
@@ -9,9 +10,17 @@ export {
   MIN_DEBT_INTEREST_RATE,
   MIN_HORIZON_YEARS,
   MIN_RETIREMENT_AGE,
-  PlanInputsSchema
+  PlanInputsSchema,
+  RealEstateInvestmentEventSchema,
+  makeDefaultRealEstateInvestment
 } from "./planInputs";
-export type { DebtRepaymentType, PlanInputs, ProjectionPoint } from "./planInputs";
+export type {
+  DebtRepaymentType,
+  LifeEvent,
+  PlanInputs,
+  ProjectionPoint,
+  RealEstateInvestmentEvent
+} from "./planInputs";
 export {
   ageFromDob,
   clampHorizon,

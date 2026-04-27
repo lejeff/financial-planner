@@ -1,4 +1,4 @@
-import type { PlanInputs, ProjectionPoint } from "./planInputs";
+import type { PlanInputs, ProjectionPoint, RealEstateInvestmentEvent } from "./planInputs";
 
 export function ageFromDob(dateOfBirth: string, now: Date = new Date()): number {
   const dob = new Date(dateOfBirth);
@@ -124,6 +124,19 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
   let otherProp = input.otherPropertyValue;
   let rental = input.rentalIncome;
 
+  // Real estate investment events: dormant before their purchase year, then
+  // behave like primaryResidence + rentalIncome (compounding value, rental
+  // flowing into netFlow). Each event carries its own running { value,
+  // rental } in nominal currency. The map keys on event.id so multiple
+  // events stack independently.
+  const reInvestmentEvents: RealEstateInvestmentEvent[] = input.events.filter(
+    (e): e is RealEstateInvestmentEvent => e.type === "realEstateInvestment"
+  );
+  const reInvestmentStates = new Map<string, { value: number; rental: number }>();
+  for (const event of reInvestmentEvents) {
+    reInvestmentStates.set(event.id, { value: 0, rental: 0 });
+  }
+
   const points: ProjectionPoint[] = [];
 
   for (let i = 0; i <= years; i += 1) {
@@ -138,6 +151,28 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
       // year `yearAge >= retirementAge`).
       const yearAge = currentAge + i;
       const inflator = (1 + input.inflationRate) ** i;
+
+      // Real estate investment events: at the purchase year, seed the
+      // event's value/rental buckets at nominal-at-purchase-year (today's
+      // money inflated to the landing year, mirroring the windfall
+      // convention). After the purchase year, compound both at the
+      // per-event rates. Active rentals contribute to netFlow below; the
+      // purchase amount is deducted from the liquid portfolio at year-end,
+      // mirroring how a one-off windfall is added.
+      let reInvestmentRental = 0;
+      for (const event of reInvestmentEvents) {
+        const state = reInvestmentStates.get(event.id)!;
+        if (startYear + i === event.purchaseYear) {
+          state.value = event.purchaseAmount * inflator;
+          state.rental = event.annualRentalIncome * inflator;
+        } else if (startYear + i > event.purchaseYear) {
+          state.value *= 1 + event.appreciationRate;
+          state.rental *= 1 + event.rentalIncomeRate;
+        }
+        if (startYear + i >= event.purchaseYear) {
+          reInvestmentRental += state.rental;
+        }
+      }
       const salaryNominal =
         yearAge < input.retirementAge ? input.annualIncome * inflator : 0;
       const spendingNominal = input.monthlySpending * 12 * inflator;
@@ -168,7 +203,8 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
       }
 
       const afterReturn = assets * (1 + input.nominalReturn);
-      const netFlow = salaryNominal + rental - spendingNominal - debtCashOut;
+      const netFlow =
+        salaryNominal + rental + reInvestmentRental - spendingNominal - debtCashOut;
 
       if (netFlow >= 0) {
         assets = afterReturn + netFlow;
@@ -197,11 +233,25 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
         assets += otherFixed;
         otherFixed = 0;
       }
+
+      // Real estate investment purchase: deduct the today's-money amount,
+      // inflated to the landing year, from the liquid portfolio at
+      // year-end. The matching property value/rental were already seeded
+      // into the event's bucket at the top of this iteration.
+      for (const event of reInvestmentEvents) {
+        if (startYear + i === event.purchaseYear && event.purchaseAmount > 0) {
+          assets -= event.purchaseAmount * inflator;
+        }
+      }
     }
 
+    let reInvestmentValue = 0;
+    for (const state of reInvestmentStates.values()) {
+      reInvestmentValue += state.value;
+    }
     const savings = assets + cash;
     const otherAssets = nonLiquid + otherFixed;
-    const realEstate = residence + otherProp;
+    const realEstate = residence + otherProp + reInvestmentValue;
     points.push({
       year: startYear + i,
       age: currentAge + i,

@@ -355,8 +355,12 @@ The only persistent data model today is `PlanInputs`, defined as a Zod schema in
 | `dateOfBirth` | string | YYYY-MM-DD | regex-checked |
 | `startAssets` | number | currency | ≥ 0 |
 | `startDebt` | number | currency | ≥ 0 |
+| `debtInterestRate` | number | fraction | 0 … 0.20 |
+| `debtRepaymentType` | enum | — | `"overTime"` \| `"inFine"` |
+| `debtEndYear` | number | year | integer |
 | `monthlySpending` | number | currency | ≥ 0 |
 | `annualIncome` | number | currency | ≥ 0 |
+| `retirementAge` | number | years | 18 … 100, integer |
 | `rentalIncome` | number | currency | ≥ 0 |
 | `rentalIncomeRate` | number | fraction | −0.05 … 0.10 |
 | `windfallAmount` | number | currency | ≥ 0 |
@@ -367,10 +371,39 @@ The only persistent data model today is `PlanInputs`, defined as a Zod schema in
 | `cashBalance` | number | currency | ≥ 0 |
 | `nonLiquidInvestments` | number | currency | ≥ 0 |
 | `otherFixedAssets` | number | currency | ≥ 0 |
+| `nonLiquidLiquidityYear` | number | year | integer |
+| `otherFixedLiquidityYear` | number | year | integer |
 | `primaryResidenceValue` | number | currency | ≥ 0 |
 | `otherPropertyValue` | number | currency | ≥ 0 |
 | `primaryResidenceRate` | number | fraction | −0.05 … 0.10 |
 | `otherPropertyRate` | number | fraction | −0.05 … 0.10 |
+| `events` | `LifeEvent[]` | — | discriminated union (see below); default `[]` |
+
+#### `LifeEvent` variants
+
+A discriminated union keyed by `type`, persisted as part of `PlanInputs`. Each
+variant carries a stable `id` (uuid) so the form can edit/remove a specific
+entry across renders. Today there is one variant; new variants drop in by
+adding another schema to `LifeEventSchema` in `packages/core/src/planInputs.ts`.
+
+##### `RealEstateInvestmentEvent` (`type: "realEstateInvestment"`)
+
+A future property purchase: at `purchaseYear` the engine deducts
+`purchaseAmount` (in today's money, inflated to the landing year) from the
+liquid portfolio, seeds a per-event property bucket and rental stream, then
+compounds both at the per-event rates each subsequent year. Behaves like
+`primaryResidenceValue` + `rentalIncome` but starts in the future and is
+funded from liquid assets.
+
+| Field | Type | Units | Constraints |
+| --- | --- | --- | --- |
+| `id` | string | — | non-empty (uuid in practice) |
+| `type` | literal | — | `"realEstateInvestment"` |
+| `purchaseAmount` | number | currency (today's money) | ≥ 0 |
+| `purchaseYear` | number | year | integer |
+| `appreciationRate` | number | fraction | −0.05 … 0.10 |
+| `annualRentalIncome` | number | currency (today's money) | ≥ 0 |
+| `rentalIncomeRate` | number | fraction | −0.05 … 0.10 |
 
 Derived output: `ProjectionPoint[]` with `{ year, age, netWorth, liquid, savings, otherAssets, realEstate, debt }`.
 

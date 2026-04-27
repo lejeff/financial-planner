@@ -11,7 +11,8 @@ import {
   deflateToToday,
   projectNetWorth,
   type PlanInputs,
-  type ProjectionPoint
+  type ProjectionPoint,
+  type RealEstateInvestmentEvent
 } from "./index";
 
 const FIXED_NOW = new Date("2026-06-15T00:00:00Z");
@@ -55,8 +56,28 @@ const BASE_INPUTS: PlanInputs = {
   // keep their original behavior. Tests that DO exercise the transfer
   // override these fields explicitly.
   nonLiquidLiquidityYear: 2200,
-  otherFixedLiquidityYear: 2200
+  otherFixedLiquidityYear: 2200,
+  events: []
 };
+
+// Compact factory for RE investment events in projection tests. We use
+// fixed ids (re-1, re-2, ...) so failures point at a specific event.
+let reEventCounter = 0;
+function makeReEvent(
+  overrides: Partial<RealEstateInvestmentEvent> = {}
+): RealEstateInvestmentEvent {
+  reEventCounter += 1;
+  return {
+    id: `re-${reEventCounter}`,
+    type: "realEstateInvestment",
+    purchaseAmount: 0,
+    purchaseYear: 0,
+    appreciationRate: 0,
+    annualRentalIncome: 0,
+    rentalIncomeRate: 0,
+    ...overrides
+  };
+}
 
 describe("ageFromDob", () => {
   it("computes age before birthday this year", () => {
@@ -1433,6 +1454,221 @@ describe("projectNetWorth liquid field", () => {
       FIXED_NOW
     );
     for (const p of points) expect(p.liquid).toBe(50_000);
+  });
+});
+
+describe("real estate investment events", () => {
+  const startYear = FIXED_NOW.getFullYear();
+  // Strip recurring flows so the only year-over-year movement comes from
+  // the RE event under test.
+  const quietBase: PlanInputs = {
+    ...BASE_INPUTS,
+    startAssets: 1_000_000,
+    cashBalance: 0,
+    annualIncome: 0,
+    monthlySpending: 0,
+    nominalReturn: 0,
+    rentalIncome: 0,
+    rentalIncomeRate: 0,
+    inflationRate: 0
+  };
+
+  it("treats an empty events array as a no-op (matches baseline)", () => {
+    const baseline = projectNetWorth(quietBase, FIXED_NOW);
+    const explicit = projectNetWorth({ ...quietBase, events: [] }, FIXED_NOW);
+    for (let i = 0; i < baseline.length; i += 1) {
+      expect(explicit[i].netWorth).toBe(baseline[i].netWorth);
+      expect(explicit[i].realEstate).toBe(baseline[i].realEstate);
+    }
+  });
+
+  it("does nothing before the purchase year", () => {
+    const event = makeReEvent({
+      purchaseAmount: 200_000,
+      purchaseYear: startYear + 5,
+      appreciationRate: 0.05,
+      annualRentalIncome: 12_000,
+      rentalIncomeRate: 0.02
+    });
+    const points = projectNetWorth({ ...quietBase, events: [event] }, FIXED_NOW);
+    for (let i = 0; i < 5; i += 1) {
+      expect(points[i].realEstate).toBe(0);
+      expect(points[i].liquid).toBe(1_000_000);
+      expect(points[i].netWorth).toBe(1_000_000);
+    }
+  });
+
+  it("at the purchase year deducts the purchase from liquid and seeds the property bucket plus the first year's rent", () => {
+    const event = makeReEvent({
+      purchaseAmount: 200_000,
+      purchaseYear: startYear + 3,
+      appreciationRate: 0,
+      annualRentalIncome: 12_000,
+      rentalIncomeRate: 0
+    });
+    const points = projectNetWorth({ ...quietBase, events: [event] }, FIXED_NOW);
+    // Before purchase, untouched.
+    expect(points[2].liquid).toBe(1_000_000);
+    expect(points[2].realEstate).toBe(0);
+    // Purchase year: liquid drops by 200k, gains 12k rental, rises by
+    // (rental - purchase) = -188k overall in liquid; property bucket holds
+    // the 200k value.
+    money(points[3].liquid, 1_000_000 - 200_000 + 12_000);
+    money(points[3].realEstate, 200_000);
+    money(points[3].netWorth, 1_000_000 + 12_000);
+  });
+
+  it("compounds the property value at the appreciation rate after purchase", () => {
+    const event = makeReEvent({
+      purchaseAmount: 100_000,
+      purchaseYear: startYear + 1,
+      appreciationRate: 0.04,
+      annualRentalIncome: 0,
+      rentalIncomeRate: 0
+    });
+    const points = projectNetWorth({ ...quietBase, events: [event] }, FIXED_NOW);
+    money(points[1].realEstate, 100_000);
+    money(points[2].realEstate, 100_000 * 1.04);
+    money(points[5].realEstate, 100_000 * 1.04 ** 4);
+    money(points[10].realEstate, 100_000 * 1.04 ** 9);
+  });
+
+  it("compounds rental income at the rentalIncomeRate after purchase", () => {
+    const event = makeReEvent({
+      purchaseAmount: 0,
+      purchaseYear: startYear + 1,
+      appreciationRate: 0,
+      annualRentalIncome: 10_000,
+      rentalIncomeRate: 0.1
+    });
+    const points = projectNetWorth({ ...quietBase, events: [event] }, FIXED_NOW);
+    // No purchase cost; with no other flows liquid grows by the cumulative
+    // rental income each year.
+    money(points[1].liquid, 1_000_000 + 10_000);
+    money(points[2].liquid, 1_000_000 + 10_000 + 10_000 * 1.1);
+    money(points[3].liquid, 1_000_000 + 10_000 + 10_000 * 1.1 + 10_000 * 1.1 ** 2);
+  });
+
+  it("inflates today's-money inputs to the landing year (windfall convention)", () => {
+    const inflationRate = 0.05;
+    const event = makeReEvent({
+      purchaseAmount: 100_000,
+      purchaseYear: startYear + 10,
+      appreciationRate: 0,
+      annualRentalIncome: 5_000,
+      rentalIncomeRate: 0
+    });
+    const points = projectNetWorth(
+      {
+        ...quietBase,
+        startAssets: 10_000_000,
+        inflationRate,
+        events: [event]
+      },
+      FIXED_NOW
+    );
+    const inflator = (1 + inflationRate) ** 10;
+    money(points[10].realEstate, 100_000 * inflator, 0.5);
+    // Year-of-purchase rental contributes one year's worth of inflated rent.
+    money(
+      points[10].liquid,
+      10_000_000 - 100_000 * inflator + 5_000 * inflator,
+      1
+    );
+  });
+
+  it("supports multiple events stacking independently", () => {
+    const a = makeReEvent({
+      purchaseAmount: 50_000,
+      purchaseYear: startYear + 2,
+      appreciationRate: 0.03,
+      annualRentalIncome: 5_000,
+      rentalIncomeRate: 0
+    });
+    const b = makeReEvent({
+      purchaseAmount: 100_000,
+      purchaseYear: startYear + 4,
+      appreciationRate: 0.05,
+      annualRentalIncome: 8_000,
+      rentalIncomeRate: 0
+    });
+    const points = projectNetWorth(
+      { ...quietBase, events: [a, b] },
+      FIXED_NOW
+    );
+    // Year 3: only A is active. Property value compounds once.
+    money(points[3].realEstate, 50_000 * 1.03);
+    // Year 5: A compounds 3x post-purchase, B compounds once.
+    money(points[5].realEstate, 50_000 * 1.03 ** 3 + 100_000 * 1.05);
+  });
+
+  it("ignores events whose purchase year falls outside the projection horizon", () => {
+    const beforeStart = makeReEvent({
+      purchaseAmount: 999_999,
+      purchaseYear: startYear - 5,
+      annualRentalIncome: 50_000
+    });
+    const afterEnd = makeReEvent({
+      purchaseAmount: 999_999,
+      purchaseYear: startYear + BASE_INPUTS.horizonYears + 5,
+      annualRentalIncome: 50_000
+    });
+    const baseline = projectNetWorth(quietBase, FIXED_NOW);
+    const padded = projectNetWorth(
+      { ...quietBase, events: [beforeStart, afterEnd] },
+      FIXED_NOW
+    );
+    for (let i = 0; i < baseline.length; i += 1) {
+      expect(padded[i].netWorth).toBe(baseline[i].netWorth);
+      expect(padded[i].realEstate).toBe(baseline[i].realEstate);
+    }
+  });
+
+  it("treats a zero-amount, zero-rental event as a no-op", () => {
+    const event = makeReEvent({ purchaseYear: startYear + 5 });
+    const baseline = projectNetWorth(quietBase, FIXED_NOW);
+    const padded = projectNetWorth({ ...quietBase, events: [event] }, FIXED_NOW);
+    for (let i = 0; i < baseline.length; i += 1) {
+      expect(padded[i].netWorth).toBe(baseline[i].netWorth);
+    }
+  });
+
+  it("preserves bucket invariant savings + otherAssets + realEstate - debt = netWorth", () => {
+    const event = makeReEvent({
+      purchaseAmount: 75_000,
+      purchaseYear: startYear + 3,
+      appreciationRate: 0.04,
+      annualRentalIncome: 6_000,
+      rentalIncomeRate: 0.02
+    });
+    const points = projectNetWorth(
+      {
+        ...BASE_INPUTS,
+        startAssets: 200_000,
+        cashBalance: 20_000,
+        nonLiquidInvestments: 10_000,
+        otherFixedAssets: 5_000,
+        primaryResidenceValue: 100_000,
+        primaryResidenceRate: 0.02,
+        nominalReturn: 0.05,
+        events: [event]
+      },
+      FIXED_NOW
+    );
+    for (const p of points) {
+      money(p.savings + p.otherAssets + p.realEstate - p.debt, p.netWorth);
+    }
+  });
+
+  it("does not mutate the input events array", () => {
+    const event = makeReEvent({
+      purchaseAmount: 100_000,
+      purchaseYear: startYear + 5
+    });
+    const inputs: PlanInputs = { ...quietBase, events: [event] };
+    const snapshot = JSON.stringify(inputs);
+    projectNetWorth(inputs, FIXED_NOW);
+    expect(JSON.stringify(inputs)).toBe(snapshot);
   });
 });
 

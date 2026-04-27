@@ -14,8 +14,11 @@ import {
   MIN_HORIZON_YEARS,
   MIN_RETIREMENT_AGE,
   computeOverTimeAnnualPayment,
+  makeDefaultRealEstateInvestment,
   type DebtRepaymentType,
-  type PlanInputs
+  type LifeEvent,
+  type PlanInputs,
+  type RealEstateInvestmentEvent
 } from "@app/core";
 
 type Props = {
@@ -225,8 +228,15 @@ function summarizeLifeEvents(
   v: PlanInputs,
   formatCompact: (n: number) => string
 ): string {
-  if (v.windfallAmount <= 0) return "None scheduled";
-  return `Windfall ${formatCompact(v.windfallAmount)} in ${v.windfallYear}`;
+  const reCount = v.events.filter((e) => e.type === "realEstateInvestment").length;
+  const parts: string[] = [];
+  if (v.windfallAmount > 0) {
+    parts.push(`Windfall ${formatCompact(v.windfallAmount)} in ${v.windfallYear}`);
+  }
+  if (reCount > 0) {
+    parts.push(`${reCount} real estate investment${reCount === 1 ? "" : "s"}`);
+  }
+  return parts.length === 0 ? "None scheduled" : parts.join(" · ");
 }
 
 function summarizeMacro(v: PlanInputs): string {
@@ -238,6 +248,30 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
   const update = <K extends keyof PlanInputs>(key: K, next: PlanInputs[K]) => {
     onChange({ ...value, [key]: next });
   };
+
+  const updateEvent = (id: string, patch: Partial<LifeEvent>) => {
+    onChange({
+      ...value,
+      events: value.events.map((e) =>
+        e.id === id ? ({ ...e, ...patch } as LifeEvent) : e
+      )
+    });
+  };
+
+  const removeEvent = (id: string) => {
+    onChange({ ...value, events: value.events.filter((e) => e.id !== id) });
+  };
+
+  const addRealEstateInvestment = () => {
+    onChange({
+      ...value,
+      events: [...value.events, makeDefaultRealEstateInvestment()]
+    });
+  };
+
+  const reInvestments = value.events.filter(
+    (e): e is RealEstateInvestmentEvent => e.type === "realEstateInvestment"
+  );
 
   // Recomputed per render so the helper text under the year sliders stays
   // in sync if the page sits open across a year boundary. The projection
@@ -519,6 +553,31 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
             onChange={(next) => update("windfallYear", next)}
             helper={yearsFromNow(value.windfallYear, currentYear)}
           />
+
+          <div className="space-y-3 pt-2">
+            {reInvestments.map((event, index) => (
+              <RealEstateInvestmentCard
+                key={event.id}
+                event={event}
+                index={index}
+                accent={ACCENT.lifeEvents}
+                yearMin={yearSliderMin}
+                yearMax={yearSliderMax}
+                currentYear={currentYear}
+                inflationRate={value.inflationRate}
+                onChange={(patch) => updateEvent(event.id, patch)}
+                onRemove={() => removeEvent(event.id)}
+              />
+            ))}
+            <button
+              type="button"
+              onClick={addRealEstateInvestment}
+              className="btn-ghost w-full justify-center"
+              style={{ borderColor: ACCENT.lifeEvents, color: ACCENT.lifeEvents }}
+            >
+              + Add Real Estate Investment
+            </button>
+          </div>
         </CollapsibleCategory>
 
         <CollapsibleCategory
@@ -697,6 +756,122 @@ function DebtScheduleSummary({
     >
       {text}
     </p>
+  );
+}
+
+function RealEstateInvestmentCard({
+  event,
+  index,
+  accent,
+  yearMin,
+  yearMax,
+  currentYear,
+  inflationRate,
+  onChange,
+  onRemove
+}: {
+  event: RealEstateInvestmentEvent;
+  index: number;
+  accent: string;
+  yearMin: number;
+  yearMax: number;
+  currentYear: number;
+  inflationRate: number;
+  onChange: (patch: Partial<RealEstateInvestmentEvent>) => void;
+  onRemove: () => void;
+}) {
+  const { format } = useCurrency();
+  // Match the projection engine: today's-money inputs are inflated to the
+  // landing year. Clamp the exponent at 0 so a past purchaseYear still shows
+  // the user's entered amount instead of a deflated one.
+  const yearsToPurchase = Math.max(0, event.purchaseYear - currentYear);
+  const inflatedPurchaseAmount =
+    event.purchaseAmount * (1 + inflationRate) ** yearsToPurchase;
+  const purchaseYearSpec: SliderSpec = {
+    key: "windfallYear",
+    label: "Purchase year",
+    min: yearMin,
+    max: yearMax,
+    step: 1,
+    format: rawYear
+  };
+
+  const rentalRateSpec: SliderSpec = {
+    key: "rentalIncomeRate",
+    label: "Rental income annual appreciation",
+    min: MIN_APPRECIATION,
+    max: MAX_APPRECIATION,
+    step: 0.001,
+    format: percent
+  };
+
+  const appreciationRateSpec: SliderSpec = {
+    key: "primaryResidenceRate",
+    label: "Annual appreciation rate",
+    min: MIN_APPRECIATION,
+    max: MAX_APPRECIATION,
+    step: 0.001,
+    format: percent
+  };
+
+  return (
+    <fieldset
+      className="relative space-y-3 rounded-[1rem] border bg-[var(--surface)] px-3 py-3 md:px-4"
+      style={{ borderColor: `color-mix(in oklab, ${accent} 50%, transparent)` }}
+      data-testid={`re-investment-card-${index}`}
+    >
+      <legend className="px-1 text-[12px] font-semibold" style={{ color: accent }}>
+        Real Estate Investment {index + 1}
+      </legend>
+      <CurrencyField
+        label="Purchase amount"
+        value={event.purchaseAmount}
+        onChange={(next) => onChange({ purchaseAmount: next })}
+        min={0}
+        max={100_000_000}
+      />
+      <SliderRow
+        spec={purchaseYearSpec}
+        value={event.purchaseYear}
+        onChange={(next) => onChange({ purchaseYear: next })}
+        helper={
+          // Surface the inflation-adjusted purchase price (i.e. the actual
+          // amount the engine deducts from liquid assets in that year) next
+          // to the relative timing, e.g. "€1,104,081 in 5 years". On a fresh
+          // blank-slate card we drop back to just the relative phrase.
+          event.purchaseAmount > 0
+            ? `${format(inflatedPurchaseAmount)} ${yearsFromNow(event.purchaseYear, currentYear)}`
+            : yearsFromNow(event.purchaseYear, currentYear)
+        }
+      />
+      <SliderRow
+        spec={appreciationRateSpec}
+        value={event.appreciationRate}
+        onChange={(next) => onChange({ appreciationRate: next })}
+      />
+      <CurrencyField
+        label="Annual rental income"
+        value={event.annualRentalIncome}
+        onChange={(next) => onChange({ annualRentalIncome: next })}
+        min={0}
+        max={10_000_000}
+      />
+      <SliderRow
+        spec={rentalRateSpec}
+        value={event.rentalIncomeRate}
+        onChange={(next) => onChange({ rentalIncomeRate: next })}
+      />
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={onRemove}
+          className="btn-ghost text-[var(--ink-muted)]"
+          aria-label={`Remove real estate investment ${index + 1}`}
+        >
+          Remove
+        </button>
+      </div>
+    </fieldset>
   );
 }
 

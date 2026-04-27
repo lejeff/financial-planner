@@ -399,3 +399,206 @@ describe("PlannerForm layout", () => {
     expect(within(fs).getByText("in 5 years")).toBeInTheDocument();
   });
 });
+
+describe("Real estate investment events", () => {
+  it("renders no investment cards by default", async () => {
+    render(<Host />);
+    await expand(/life events/i);
+    expect(screen.queryByTestId("re-investment-card-0")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /add real estate investment/i })
+    ).toBeInTheDocument();
+  });
+
+  it("adds a new investment card with all five fields when the add button is clicked", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    await user.click(
+      screen.getByRole("button", { name: /add real estate investment/i })
+    );
+    const card = screen.getByTestId("re-investment-card-0");
+    expect(within(card).getByLabelText("Purchase amount")).toBeInTheDocument();
+    expect(within(card).getByLabelText("Annual rental income")).toBeInTheDocument();
+    expect(within(card).getByText("Purchase year")).toBeInTheDocument();
+    expect(
+      within(card).getByText("Rental income annual appreciation")
+    ).toBeInTheDocument();
+    expect(within(card).getByText("Annual appreciation rate")).toBeInTheDocument();
+  });
+
+  it("orders the card fields: Purchase amount, Purchase year, Appreciation, Rental income, Rental appreciation", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    await user.click(
+      screen.getByRole("button", { name: /add real estate investment/i })
+    );
+
+    const card = screen.getByTestId("re-investment-card-0");
+    // The DOM order of the field labels is the visual order of the fields.
+    // We grab everything that doubles as a field label (CurrencyField uses
+    // aria-label, SliderRow renders the label as plain text inside its row)
+    // and check the slice we control.
+    const labels = [
+      within(card).getByLabelText("Purchase amount"),
+      within(card).getByText("Purchase year"),
+      within(card).getByText("Annual appreciation rate"),
+      within(card).getByLabelText("Annual rental income"),
+      within(card).getByText("Rental income annual appreciation")
+    ];
+    for (let i = 1; i < labels.length; i += 1) {
+      // Node.compareDocumentPosition flag 4 = "preceding sibling/ancestor",
+      // i.e. labels[i-1] comes before labels[i] in document order.
+      expect(
+        labels[i - 1].compareDocumentPosition(labels[i]) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+    }
+  });
+
+  it("stacks multiple investment cards independently", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    const addBtn = screen.getByRole("button", {
+      name: /add real estate investment/i
+    });
+    await user.click(addBtn);
+    await user.click(addBtn);
+    expect(screen.getByTestId("re-investment-card-0")).toBeInTheDocument();
+    expect(screen.getByTestId("re-investment-card-1")).toBeInTheDocument();
+  });
+
+  it("updates the purchase amount of a specific card without affecting siblings", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    const addBtn = screen.getByRole("button", {
+      name: /add real estate investment/i
+    });
+    await user.click(addBtn);
+    await user.click(addBtn);
+
+    const cardA = screen.getByTestId("re-investment-card-0");
+    const cardB = screen.getByTestId("re-investment-card-1");
+    const amountA = within(cardA).getByLabelText(
+      "Purchase amount"
+    ) as HTMLInputElement;
+    const amountB = within(cardB).getByLabelText(
+      "Purchase amount"
+    ) as HTMLInputElement;
+
+    await user.clear(amountA);
+    await user.type(amountA, "250000");
+    await user.tab();
+
+    expect(amountA.value).toBe("250,000");
+    expect(amountB.value).toBe("0");
+  });
+
+  it("removes a specific card when its remove button is clicked", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    const addBtn = screen.getByRole("button", {
+      name: /add real estate investment/i
+    });
+    await user.click(addBtn);
+    await user.click(addBtn);
+    expect(screen.getByTestId("re-investment-card-1")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /remove real estate investment 1/i })
+    );
+
+    // After removal of the first card, the remaining one re-indexes to 0.
+    expect(screen.getByTestId("re-investment-card-0")).toBeInTheDocument();
+    expect(screen.queryByTestId("re-investment-card-1")).toBeNull();
+  });
+
+  it("includes the investment count in the collapsed Life Events summary", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    await user.click(
+      screen.getByRole("button", { name: /add real estate investment/i })
+    );
+    await user.click(screen.getByRole("button", { name: /life events/i }));
+    expect(
+      screen.getByText(/1 real estate investment/i)
+    ).toBeInTheDocument();
+  });
+
+  it("shows the inflation-adjusted purchase price next to the relative year in the helper text", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    await user.click(
+      screen.getByRole("button", { name: /add real estate investment/i })
+    );
+
+    const card = screen.getByTestId("re-investment-card-0");
+    const amount = within(card).getByLabelText(
+      "Purchase amount"
+    ) as HTMLInputElement;
+    await user.clear(amount);
+    await user.type(amount, "1000000");
+    await user.tab();
+
+    const yearsToPurchase = 4;
+    const yearSlider = within(card).getByLabelText(
+      "Purchase year"
+    ) as HTMLInputElement;
+    fireEvent.change(yearSlider, {
+      target: { value: String(new Date().getFullYear() + yearsToPurchase) }
+    });
+
+    // The helper must surface the *nominal* (inflation-adjusted) cost the
+    // engine actually deducts at purchase year, not the today's-money input.
+    // We don't hard-code the currency symbol (it depends on the locale set
+    // by CurrencyProvider), but the inflated thousands + relative-year
+    // phrase must both appear in the helper line.
+    const inflated = Math.round(
+      1_000_000 * (1 + DEFAULT_PLAN_INPUTS.inflationRate) ** yearsToPurchase
+    );
+    const formatted = inflated.toLocaleString("en-US");
+    expect(formatted).not.toBe("1,000,000"); // sanity-check: non-zero inflation default
+    expect(
+      within(card).getByText(new RegExp(`${formatted} in ${yearsToPurchase} years`))
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to just the relative year when no purchase amount has been entered yet", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    await user.click(
+      screen.getByRole("button", { name: /add real estate investment/i })
+    );
+    const card = screen.getByTestId("re-investment-card-0");
+    // Default purchase year = current year + 5, so the helper reads "in 5 years".
+    expect(within(card).getByText("in 5 years")).toBeInTheDocument();
+    // No formatted price appears anywhere in the card while amount is 0.
+    expect(within(card).queryByText(/[0-9],[0-9]/)).toBeNull();
+  });
+
+  it("combines the windfall and investment count into a single summary line", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+
+    const amount = screen.getByLabelText("Windfall amount") as HTMLInputElement;
+    await user.clear(amount);
+    await user.type(amount, "50000");
+    await user.tab();
+    await user.click(
+      screen.getByRole("button", { name: /add real estate investment/i })
+    );
+
+    await user.click(screen.getByRole("button", { name: /life events/i }));
+    expect(
+      screen.getByText(/Windfall .{1,3}50K in.+1 real estate investment/i)
+    ).toBeInTheDocument();
+  });
+});

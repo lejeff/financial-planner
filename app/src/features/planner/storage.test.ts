@@ -50,6 +50,46 @@ describe("loadInputs", () => {
     stubStorage({ "planner.inputs.v1": "{ not json" });
     expect(loadInputs()).toEqual(DEFAULT_PLAN_INPUTS);
   });
+
+  it("hydrates a legacy plan (no events field) with an empty events array", () => {
+    // Snapshot of a real legacy payload: every PlanInputs field but `events`.
+    const legacy = JSON.stringify({
+      ...DEFAULT_PLAN_INPUTS,
+      events: undefined
+    });
+    stubStorage({ "planner.inputs.v1": legacy });
+
+    expect(loadInputs().events).toEqual([]);
+  });
+
+  it("preserves a valid stored events array on load", () => {
+    const validEvent = {
+      id: "abc",
+      type: "realEstateInvestment",
+      purchaseAmount: 100_000,
+      purchaseYear: 2030,
+      appreciationRate: 0.03,
+      annualRentalIncome: 12_000,
+      rentalIncomeRate: 0.02
+    };
+    const stored = JSON.stringify({ ...DEFAULT_PLAN_INPUTS, events: [validEvent] });
+    stubStorage({ "planner.inputs.v1": stored });
+
+    expect(loadInputs().events).toEqual([validEvent]);
+  });
+
+  it("falls back to [] when stored events array is malformed (keeps other fields)", () => {
+    const stored = JSON.stringify({
+      ...DEFAULT_PLAN_INPUTS,
+      startAssets: 250_000,
+      events: [{ id: "x", type: "unknown", garbage: true }]
+    });
+    stubStorage({ "planner.inputs.v1": stored });
+
+    const loaded = loadInputs();
+    expect(loaded.events).toEqual([]);
+    expect(loaded.startAssets).toBe(250_000);
+  });
 });
 
 describe("saveInputs and clearInputs", () => {

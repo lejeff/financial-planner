@@ -15,6 +15,38 @@ export const MAX_RETIREMENT_AGE = 100;
 export const DEBT_REPAYMENT_TYPES = ["overTime", "inFine"] as const;
 export type DebtRepaymentType = (typeof DEBT_REPAYMENT_TYPES)[number];
 
+// Discriminated union of life-event variants. Each variant carries a stable
+// `id` (uuid) so the form can edit/remove a specific entry across renders,
+// and a `type` literal that the projection engine and the form switch on.
+// New variants drop in by adding another schema to LifeEventSchema below.
+export const RealEstateInvestmentEventSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("realEstateInvestment"),
+  purchaseAmount: z.number().finite().nonnegative(),
+  purchaseYear: z.number().int(),
+  appreciationRate: z
+    .number()
+    .finite()
+    .min(MIN_APPRECIATION)
+    .max(MAX_APPRECIATION),
+  annualRentalIncome: z.number().finite().nonnegative(),
+  rentalIncomeRate: z
+    .number()
+    .finite()
+    .min(MIN_APPRECIATION)
+    .max(MAX_APPRECIATION)
+});
+
+export type RealEstateInvestmentEvent = z.infer<
+  typeof RealEstateInvestmentEventSchema
+>;
+
+export const LifeEventSchema = z.discriminatedUnion("type", [
+  RealEstateInvestmentEventSchema
+]);
+
+export type LifeEvent = z.infer<typeof LifeEventSchema>;
+
 export const PlanInputsSchema = z.object({
   name: z.string(),
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "dateOfBirth must be YYYY-MM-DD"),
@@ -48,7 +80,10 @@ export const PlanInputsSchema = z.object({
   // that year the projection moves the asset's value into the liquid
   // portfolio so it begins compounding at the expected return.
   nonLiquidLiquidityYear: z.number().int(),
-  otherFixedLiquidityYear: z.number().int()
+  otherFixedLiquidityYear: z.number().int(),
+  // Ordered list of life events. See LifeEventSchema for the union of
+  // supported variants. Empty array means no scheduled events.
+  events: z.array(LifeEventSchema)
 });
 
 export type PlanInputs = z.infer<typeof PlanInputsSchema>;
@@ -110,5 +145,23 @@ export const DEFAULT_PLAN_INPUTS: PlanInputs = {
   primaryResidenceRate: DEFAULT_RATE,
   otherPropertyRate: DEFAULT_RATE,
   nonLiquidLiquidityYear: new Date().getFullYear(),
-  otherFixedLiquidityYear: new Date().getFullYear()
+  otherFixedLiquidityYear: new Date().getFullYear(),
+  events: []
 };
+
+// Factory for a fresh real estate investment event with sensible defaults:
+// purchase year five years out (matches windfall/loan defaults) and zero
+// monetary fields + zero rates so the card reads as a blank slate the user
+// fills in deliberately. The id is a uuid so it survives reorders and
+// re-renders.
+export function makeDefaultRealEstateInvestment(): RealEstateInvestmentEvent {
+  return {
+    id: crypto.randomUUID(),
+    type: "realEstateInvestment",
+    purchaseAmount: 0,
+    purchaseYear: new Date().getFullYear() + 5,
+    appreciationRate: 0,
+    annualRentalIncome: 0,
+    rentalIncomeRate: 0
+  };
+}

@@ -1,0 +1,38 @@
+---
+description: Keep documentation in sync with every shipped change
+alwaysApply: true
+---
+
+# Documentation freshness
+
+Docs are part of every change. Before opening a PR, audit each doc that
+mirrors what changed and update it in the same PR — never as a follow-up.
+
+## What to check (and where it mirrors)
+
+- Schema changes in `packages/core/src/planInputs.ts` →
+  `docs/architecture.md` §4.1 (the `PlanInputs` table and any sub-tables
+  for discriminated-union variants like `LifeEvent`).
+- `@app/core` public API (new export, signature change) →
+  `docs/architecture.md` §2.3.
+- Env vars added/removed/renamed → `.env.example` AND the env Zod schema
+  in `app/src/lib/env.ts` / `env.server.ts` AND `docs/architecture.md` §6.
+- Routes / API endpoints added → `docs/architecture.md` §2.2 bullet list.
+- Stack / scripts changes (new package, new script, deploy step) →
+  `README.md`.
+- Milestone progress (a milestone ships) → `ROADMAP.md` checkbox + change log.
+- Feature shipped via plan mode → archive the plan to
+  `docs/plans/YYYY-MM-DD-<slug>.md` and add a one-line entry in
+  `docs/plans/README.md` (bumping the plan-count line).
+
+## When you change `docs/architecture.md`
+
+Run `npm run docs:build` to regenerate `docs/architecture.pdf` and
+`docs/architecture.html`, then commit all three files together — the
+`docs/README.md` explicitly calls this out.
+
+## Report explicitly
+
+In the final pre-ship summary (and in the PR body), list each doc you
+checked and whether it was updated or confirmed unchanged. "I forgot" is
+not an allowed state.

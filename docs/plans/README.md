@@ -5,7 +5,7 @@ Filenames are prefixed with the date the plan was created.
 
 > For the current roadmap of upcoming work, see [`ROADMAP.md`](../../ROADMAP.md) at the repo root.
 
-**21 plans** across 3 days.
+**22 plans** across 4 days.
 
 ## 2026-04-22
 
@@ -36,3 +36,7 @@ Filenames are prefixed with the date the plan was created.
 - [Net worth negative warning](./2026-04-24-net-worth-negative-warning.md) — Add a coral alert under the Projected net worth chart — mirroring the existing Liquidity warning — that fires when the projection first dips below zero, showing the year, age, and shortfall amount.
 - [Pin debt just below zero](./2026-04-24-pin-debt-just-below-zero.md) — Reorder the stacked bars in the Projected net worth chart so Debt always sits directly beneath the zero line, with any negative asset values stacking below Debt (further from zero). Also retune the green palette so Savings is the darker shade and Real Estate is the lighter shade.
 - [Reorder bar stacks](./2026-04-24-reorder-bar-stacks.md) — Change the stack order in the Projected net worth chart so positive bars go Savings → Real Estate → Other Assets (bottom to top) and negative bars go Debt → Savings → Real Estate → Other Assets (from zero outward).
+
+## 2026-04-25
+
+- [Real Estate Investment life event](./2026-04-25-real-estate-investment-event.md) — Add a new "Real Estate Investment" life event modelling a future property purchase (deducted from liquid assets at purchase year) with its own appreciation rate and rental income stream. Introduces a list-based `events: LifeEvent[]` discriminated union on `PlanInputs` so future variants drop in without further schema churn, and brings the architecture doc back in sync with the schema.
