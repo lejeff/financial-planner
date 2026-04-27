@@ -225,6 +225,19 @@ describe("PlannerForm layout", () => {
     render(<Host />);
     await expand(/^debt$/i);
     const debt = screen.getByTestId("subsection-debt");
+    // Defaults are zero and the loan end year is the current year, so we
+    // need to seed both a non-zero principal and a future end year for the
+    // schedule summary to render real numbers.
+    const debtField = within(debt).getByLabelText("Debt") as HTMLInputElement;
+    await user.clear(debtField);
+    await user.type(debtField, "50000");
+    await user.tab();
+
+    const endYear = within(debt).getByLabelText("Loan end year") as HTMLInputElement;
+    await user.clear(endYear);
+    await user.type(endYear, String(new Date().getFullYear() + 15));
+    await user.tab();
+
     const summary = within(debt).getByTestId("debt-schedule-summary");
     expect(summary).toHaveTextContent(/Annual repayment \(capital \+ interest\)/);
 
@@ -268,11 +281,13 @@ describe("PlannerForm layout", () => {
     // Income & Expenses, Real Estate, Life Events, and Macro assumptions all
     // start collapsed, so their summaries should be visible. We avoid
     // hard-coding the currency symbol because the default depends on the
-    // locale set by CurrencyProvider.
+    // locale set by CurrencyProvider. Defaults are zero, so each summary
+    // reflects an empty plan.
     expect(
-      screen.getByText(/120K\/yr income · .{1,3}5K\/mo expenses/)
+      screen.getByText(/.{1,3}0\/yr income · .{1,3}0\/mo expenses/)
     ).toBeInTheDocument();
-    expect(screen.getByText(/^.{1,3}400K$/)).toBeInTheDocument();
+    // Real estate summary is the em-dash placeholder when both values are 0.
+    expect(screen.getByText("\u2014")).toBeInTheDocument();
     expect(screen.getByText("None scheduled")).toBeInTheDocument();
     expect(screen.getByText(/Inflation 2\.0%/)).toBeInTheDocument();
   });
@@ -281,10 +296,10 @@ describe("PlannerForm layout", () => {
     const user = userEvent.setup();
     render(<Host />);
     // Assets and Debt starts open, so its 'Net' summary should not be in the DOM.
-    expect(screen.queryByText(/Net .{1,3}220K/)).toBeNull();
+    expect(screen.queryByText(/^Net .{1,3}10K$/)).toBeNull();
     // Collapse it; the summary should appear in its header row.
     await user.click(screen.getByRole("button", { name: /assets and debt/i }));
-    expect(screen.getByText(/Net .{1,3}220K/)).toBeInTheDocument();
+    expect(screen.getByText(/^Net .{1,3}10K$/)).toBeInTheDocument();
   });
 
   it("updates the Life Events summary when a windfall amount is entered", async () => {

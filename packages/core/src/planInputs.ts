@@ -59,29 +59,47 @@ export type ProjectionPoint = {
   debt: number;
 };
 
+// Computed at module load: a fresh planner session starts with the user 40
+// years old today (a sensible neutral midpoint) and every monetary/rate field
+// at 0 so the form reads as a blank slate. Year-based fields default to the
+// current calendar year, retirementAge stays at 65, and horizonYears stays at
+// 30 (the schema enforces a minimum of 10).
+function defaultDateOfBirth(): string {
+  const now = new Date();
+  const y = now.getFullYear() - 40;
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+// Every rate field defaults to 2% as a neutral starting point that is more
+// useful in the chart than a flat zero (which would render the projection as
+// a horizontal line).
+const DEFAULT_RATE = 0.02;
+
 export const DEFAULT_PLAN_INPUTS: PlanInputs = {
   name: "",
-  dateOfBirth: "1985-01-01",
-  startAssets: 250_000,
-  startDebt: 50_000,
-  debtInterestRate: 0.05,
+  dateOfBirth: defaultDateOfBirth(),
+  startAssets: 10_000,
+  startDebt: 0,
+  debtInterestRate: DEFAULT_RATE,
   debtRepaymentType: "overTime",
-  debtEndYear: new Date().getFullYear() + 15,
-  monthlySpending: 5_000,
-  annualIncome: 120_000,
+  debtEndYear: new Date().getFullYear(),
+  monthlySpending: 0,
+  annualIncome: 0,
   retirementAge: 65,
   rentalIncome: 0,
-  rentalIncomeRate: 0.02,
+  rentalIncomeRate: DEFAULT_RATE,
   windfallAmount: 0,
-  windfallYear: new Date().getFullYear() + 10,
-  nominalReturn: 0.06,
-  inflationRate: 0.02,
+  windfallYear: new Date().getFullYear(),
+  nominalReturn: 0.05,
+  inflationRate: DEFAULT_RATE,
   horizonYears: 30,
-  cashBalance: 20_000,
+  cashBalance: 0,
   nonLiquidInvestments: 0,
   otherFixedAssets: 0,
-  primaryResidenceValue: 400_000,
+  primaryResidenceValue: 0,
   otherPropertyValue: 0,
-  primaryResidenceRate: 0.03,
-  otherPropertyRate: 0.03
+  primaryResidenceRate: DEFAULT_RATE,
+  otherPropertyRate: DEFAULT_RATE
 };

@@ -88,6 +88,15 @@ describe("PlannerPage", () => {
     const user = userEvent.setup();
     renderPage();
 
+    // The default plan ships with zero balances, so seed a non-zero cash
+    // balance to give the projection something to work with. Inflation is
+    // already 2% by default, which is enough to make the real and future
+    // views diverge.
+    const cashField = screen.getByLabelText("Cash Balance") as HTMLInputElement;
+    await user.clear(cashField);
+    await user.type(cashField, "100000");
+    await user.tab();
+
     const getProjectedCard = () =>
       screen.getByText(/Projected net worth at age/i).closest("div")!.parentElement!;
 
@@ -145,6 +154,14 @@ describe("PlannerPage", () => {
     const salary = screen.getByLabelText("Annual Salary") as HTMLInputElement;
     await user.clear(salary);
     await user.type(salary, "0");
+    await user.tab();
+
+    // The default plan ships with zero monthly spending, so liquids stay flat
+    // forever and never trip the warning. Force a drain by setting a non-zero
+    // recurring expense.
+    const spending = screen.getByLabelText("Recurring monthly expenses") as HTMLInputElement;
+    await user.clear(spending);
+    await user.type(spending, "5000");
     await user.tab();
 
     const liquidityHeading = await screen.findByText("Liquidity warning");
