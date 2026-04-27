@@ -69,7 +69,7 @@ const NOMINAL_RETURN_SLIDER: SliderSpec = {
   label: "Expected annual return",
   min: -0.05,
   max: 0.15,
-  step: 0.005,
+  step: 0.001,
   format: percent
 };
 
@@ -78,7 +78,7 @@ const RENTAL_INCOME_RATE_SLIDER: SliderSpec = {
   label: "Rental income annual appreciation",
   min: MIN_APPRECIATION,
   max: MAX_APPRECIATION,
-  step: 0.005,
+  step: 0.001,
   format: percent
 };
 
@@ -87,7 +87,7 @@ const PRIMARY_RESIDENCE_RATE_SLIDER: SliderSpec = {
   label: "Annual appreciation rate",
   min: MIN_APPRECIATION,
   max: MAX_APPRECIATION,
-  step: 0.005,
+  step: 0.001,
   format: percent
 };
 
@@ -96,7 +96,7 @@ const OTHER_PROPERTY_RATE_SLIDER: SliderSpec = {
   label: "Annual appreciation rate",
   min: MIN_APPRECIATION,
   max: MAX_APPRECIATION,
-  step: 0.005,
+  step: 0.001,
   format: percent
 };
 
@@ -105,7 +105,7 @@ const INFLATION_SLIDER: SliderSpec = {
   label: "Inflation",
   min: 0,
   max: 0.08,
-  step: 0.0025,
+  step: 0.001,
   format: percent
 };
 
@@ -132,7 +132,7 @@ const DEBT_INTEREST_RATE_SLIDER: SliderSpec = {
   label: "Annual interest rate",
   min: MIN_DEBT_INTEREST_RATE,
   max: MAX_DEBT_INTEREST_RATE,
-  step: 0.0025,
+  step: 0.001,
   format: percent
 };
 
