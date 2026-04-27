@@ -33,6 +33,8 @@ type SliderKey =
   | "otherPropertyRate"
   | "rentalIncomeRate"
   | "debtInterestRate"
+  | "debtEndYear"
+  | "windfallYear"
   | "nonLiquidLiquidityYear"
   | "otherFixedLiquidityYear";
 
@@ -134,9 +136,6 @@ const DEBT_INTEREST_RATE_SLIDER: SliderSpec = {
   format: percent
 };
 
-const DEBT_END_YEAR_MIN = 1900;
-const DEBT_END_YEAR_MAX = 2200;
-
 type AmountKey =
   | "startAssets"
   | "startDebt"
@@ -179,9 +178,6 @@ const REAL_ESTATE_AMOUNTS: AmountSpec[] = [
   { key: "primaryResidenceValue", label: "Primary Residence value", min: 0, max: 100_000_000 },
   { key: "otherPropertyValue", label: "Other Property value", min: 0, max: 100_000_000 }
 ];
-
-const WINDFALL_YEAR_MIN = 1900;
-const WINDFALL_YEAR_MAX = 2200;
 
 const ACCENT = {
   aboutYou: "var(--navy-soft)",
@@ -243,19 +239,19 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
     onChange({ ...value, [key]: next });
   };
 
-  // Recomputed per render so the helper text under the liquidity sliders
-  // stays in sync if the page sits open across a year boundary. The
-  // projection itself uses the `now` argument passed to `projectNetWorth`
-  // for testability — this is purely UI.
+  // Recomputed per render so the helper text under the year sliders stays
+  // in sync if the page sits open across a year boundary. The projection
+  // itself uses the `now` argument passed to `projectNetWorth` for
+  // testability — this is purely UI.
   const currentYear = new Date().getFullYear();
-  const liquidityYearMin = currentYear;
-  const liquidityYearMax = currentYear + MAX_HORIZON_YEARS;
+  const yearSliderMin = currentYear;
+  const yearSliderMax = currentYear + MAX_HORIZON_YEARS;
 
   const NON_LIQUID_LIQUIDITY_YEAR_SLIDER: SliderSpec = {
     key: "nonLiquidLiquidityYear",
     label: "Liquidity year",
-    min: liquidityYearMin,
-    max: liquidityYearMax,
+    min: yearSliderMin,
+    max: yearSliderMax,
     step: 1,
     format: rawYear
   };
@@ -263,8 +259,32 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
   const OTHER_FIXED_LIQUIDITY_YEAR_SLIDER: SliderSpec = {
     key: "otherFixedLiquidityYear",
     label: "Liquidity year",
-    min: liquidityYearMin,
-    max: liquidityYearMax,
+    min: yearSliderMin,
+    max: yearSliderMax,
+    step: 1,
+    format: rawYear
+  };
+
+  // The loan-end label flips between "Loan end year" and "Lump sum
+  // repayment year" depending on the repayment type, so the spec is built
+  // per render.
+  const debtEndYearLabel =
+    value.debtRepaymentType === "inFine" ? "Lump sum repayment year" : "Loan end year";
+
+  const DEBT_END_YEAR_SLIDER: SliderSpec = {
+    key: "debtEndYear",
+    label: debtEndYearLabel,
+    min: yearSliderMin,
+    max: yearSliderMax,
+    step: 1,
+    format: rawYear
+  };
+
+  const WINDFALL_YEAR_SLIDER: SliderSpec = {
+    key: "windfallYear",
+    label: "Windfall year",
+    min: yearSliderMin,
+    max: yearSliderMax,
     step: 1,
     format: rawYear
   };
@@ -410,28 +430,12 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
                 <option value="inFine">In Fine</option>
               </select>
             </FramedField>
-            <FramedField
-              label={value.debtRepaymentType === "inFine" ? "Lump sum repayment year" : "Loan end year"}
-            >
-              <input
-                type="number"
-                min={DEBT_END_YEAR_MIN}
-                max={DEBT_END_YEAR_MAX}
-                step={1}
-                value={value.debtEndYear}
-                onChange={(event) => {
-                  const parsed = Number(event.target.value);
-                  update("debtEndYear", Number.isFinite(parsed) ? parsed : 0);
-                }}
-                className="field-input"
-                aria-label={
-                  value.debtRepaymentType === "inFine"
-                    ? "Lump sum repayment year"
-                    : "Loan end year"
-                }
-                inputMode="numeric"
-              />
-            </FramedField>
+            <SliderRow
+              spec={DEBT_END_YEAR_SLIDER}
+              value={value.debtEndYear}
+              onChange={(next) => update("debtEndYear", next)}
+              helper={yearsFromNow(value.debtEndYear, currentYear)}
+            />
             <DebtScheduleSummary value={value} format={format} />
           </CollapsibleSubsection>
         </CollapsibleCategory>
@@ -509,22 +513,12 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
             min={0}
             max={100_000_000}
           />
-          <FramedField label="Windfall year">
-            <input
-              type="number"
-              min={WINDFALL_YEAR_MIN}
-              max={WINDFALL_YEAR_MAX}
-              step={1}
-              value={value.windfallYear}
-              onChange={(event) => {
-                const parsed = Number(event.target.value);
-                update("windfallYear", Number.isFinite(parsed) ? parsed : 0);
-              }}
-              className="field-input"
-              aria-label="Windfall year"
-              inputMode="numeric"
-            />
-          </FramedField>
+          <SliderRow
+            spec={WINDFALL_YEAR_SLIDER}
+            value={value.windfallYear}
+            onChange={(next) => update("windfallYear", next)}
+            helper={yearsFromNow(value.windfallYear, currentYear)}
+          />
         </CollapsibleCategory>
 
         <CollapsibleCategory
@@ -736,6 +730,7 @@ function SliderRow({
         step={spec.step}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
+        aria-label={spec.label}
       />
       <div className="flex items-center justify-between text-[11px] text-[var(--ink-muted)]">
         <span>{spec.format(spec.min)}</span>

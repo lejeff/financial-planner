@@ -146,13 +146,11 @@ describe("PlannerForm layout", () => {
     expect(field.value).toBe("75,000");
   });
 
-  it("updates the Windfall year field when the user types", async () => {
-    const user = userEvent.setup();
+  it("moves the Windfall year slider", async () => {
     render(<Host />);
     await expand(/life events/i);
     const field = screen.getByLabelText("Windfall year") as HTMLInputElement;
-    await user.clear(field);
-    await user.type(field, "2045");
+    fireEvent.change(field, { target: { value: "2045" } });
     expect(field.value).toBe("2045");
   });
 
@@ -225,18 +223,19 @@ describe("PlannerForm layout", () => {
     render(<Host />);
     await expand(/^debt$/i);
     const debt = screen.getByTestId("subsection-debt");
-    // Defaults are zero and the loan end year is the current year, so we
-    // need to seed both a non-zero principal and a future end year for the
-    // schedule summary to render real numbers.
+    // The principal defaults to 0 (no schedule renders) and the loan end
+    // year defaults to currentYear + 5, so we just seed a non-zero balance
+    // and push the end year out a bit further via the slider to give the
+    // schedule summary something concrete to display.
     const debtField = within(debt).getByLabelText("Debt") as HTMLInputElement;
     await user.clear(debtField);
     await user.type(debtField, "50000");
     await user.tab();
 
     const endYear = within(debt).getByLabelText("Loan end year") as HTMLInputElement;
-    await user.clear(endYear);
-    await user.type(endYear, String(new Date().getFullYear() + 15));
-    await user.tab();
+    fireEvent.change(endYear, {
+      target: { value: String(new Date().getFullYear() + 15) }
+    });
 
     const summary = within(debt).getByTestId("debt-schedule-summary");
     expect(summary).toHaveTextContent(/Annual repayment \(capital \+ interest\)/);
@@ -373,5 +372,30 @@ describe("PlannerForm layout", () => {
     const currentYear = new Date().getFullYear();
     fireEvent.change(sliders[0], { target: { value: String(currentYear + 1) } });
     expect(within(nonLiquid).getByText("in 1 year")).toBeInTheDocument();
+  });
+
+  it("renders the Loan end year as a slider with an 'in 5 years' helper at the default", async () => {
+    render(<Host />);
+    await expand(/^debt$/i);
+    const debt = screen.getByTestId("subsection-debt");
+    const slider = within(debt).getByLabelText("Loan end year") as HTMLInputElement;
+    expect(slider.type).toBe("range");
+    // Default is currentYear + 5, so the raw-year display and helper match.
+    const currentYear = new Date().getFullYear();
+    expect(slider.value).toBe(String(currentYear + 5));
+    expect(within(debt).getByText(String(currentYear + 5))).toBeInTheDocument();
+    expect(within(debt).getByText("in 5 years")).toBeInTheDocument();
+  });
+
+  it("renders the Windfall year as a slider with an 'in 5 years' helper at the default", async () => {
+    render(<Host />);
+    await expand(/life events/i);
+    const fs = screen.getByText("Life Events").closest("fieldset")!;
+    const slider = within(fs).getByLabelText("Windfall year") as HTMLInputElement;
+    expect(slider.type).toBe("range");
+    const currentYear = new Date().getFullYear();
+    expect(slider.value).toBe(String(currentYear + 5));
+    expect(within(fs).getByText(String(currentYear + 5))).toBeInTheDocument();
+    expect(within(fs).getByText("in 5 years")).toBeInTheDocument();
   });
 });

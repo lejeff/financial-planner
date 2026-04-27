@@ -66,9 +66,11 @@ export type ProjectionPoint = {
 
 // Computed at module load: a fresh planner session starts with the user 40
 // years old today (a sensible neutral midpoint) and every monetary/rate field
-// at 0 so the form reads as a blank slate. Year-based fields default to the
-// current calendar year, retirementAge stays at 65, and horizonYears stays at
-// 30 (the schema enforces a minimum of 10).
+// at 0 so the form reads as a blank slate. Loan end year and windfall year
+// default to currentYear + 5 (a reasonable mid-term target users can adjust
+// via the slider); liquidity-year fields stay at the current year (the
+// "already liquid" baseline). retirementAge stays at 65 and horizonYears
+// stays at 30 (the schema enforces a minimum of 10).
 function defaultDateOfBirth(): string {
   const now = new Date();
   const y = now.getFullYear() - 40;
@@ -89,14 +91,14 @@ export const DEFAULT_PLAN_INPUTS: PlanInputs = {
   startDebt: 0,
   debtInterestRate: DEFAULT_RATE,
   debtRepaymentType: "overTime",
-  debtEndYear: new Date().getFullYear(),
+  debtEndYear: new Date().getFullYear() + 5,
   monthlySpending: 0,
   annualIncome: 0,
   retirementAge: 65,
   rentalIncome: 0,
   rentalIncomeRate: DEFAULT_RATE,
   windfallAmount: 0,
-  windfallYear: new Date().getFullYear(),
+  windfallYear: new Date().getFullYear() + 5,
   nominalReturn: 0.05,
   inflationRate: DEFAULT_RATE,
   horizonYears: 30,
