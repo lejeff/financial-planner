@@ -5,6 +5,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Rectangle,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -23,6 +24,25 @@ const CORAL = "#ff7a59";
 const NAVY = "#0f2239";
 const INK_SOFT = "#4b5b74";
 const BORDER = "#e6e3da";
+
+type LiquidShapeProps = {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  fill?: string;
+};
+
+// Dynamic pill-cap radius = half the bar width, capped by the bar's own
+// height so the curve never overshoots a very short bar. Same convention
+// as ProjectionChart: [r, r, 0, 0] rounds the visual outer end for both
+// positive and negative bars (recharts handles the negative-height flip).
+function LiquidBarShape(props: LiquidShapeProps) {
+  const width = props.width ?? 0;
+  const height = props.height ?? 0;
+  const r = Math.min(width / 2, Math.abs(height));
+  return <Rectangle {...(props as object)} radius={[r, r, 0, 0]} />;
+}
 
 type ChartTooltipProps = {
   active?: boolean;
@@ -86,7 +106,11 @@ export function CashPositionChart({ data }: Props) {
             cursor={{ fill: "rgba(15, 34, 57, 0.04)" }}
             content={<ChartTooltip format={format} />}
           />
-          <Bar dataKey="liquid" radius={[6, 6, 0, 0]} isAnimationActive={false}>
+          <Bar
+            dataKey="liquid"
+            shape={<LiquidBarShape />}
+            isAnimationActive={false}
+          >
             {data.map((point) => (
               <Cell key={point.year} fill={point.liquid >= 0 ? TEAL : CORAL} />
             ))}
