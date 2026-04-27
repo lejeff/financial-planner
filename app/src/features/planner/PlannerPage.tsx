@@ -7,6 +7,9 @@ import { ProjectionChart } from "./ProjectionChart";
 import {
   DEFAULT_PLAN_INPUTS,
   ageFromDob,
+  computeAnnualCashFlowRatio,
+  computeCurrentNetWorth,
+  computeRealCAGR,
   deflateToToday,
   projectNetWorth,
   type PlanInputs
@@ -15,6 +18,14 @@ import { loadInputs, saveInputs } from "./storage";
 import { useCurrency } from "@/features/currency/CurrencyContext";
 
 type ViewMode = "real" | "nominal";
+
+// Inserts a space between the leading currency symbol (and any sign prefix)
+// and the digits, e.g. "€10,000" → "€ 10,000". Used only for the headline
+// stat-card values; we leave the rest of the app's currency formatting alone.
+// Strings without digits (e.g. "—") pass through unchanged.
+function withSymbolSpace(formatted: string): string {
+  return formatted.replace(/^([^\d]+)(\d)/, "$1 $2");
+}
 
 export function PlannerPage() {
   const { format } = useCurrency();
@@ -42,13 +53,30 @@ export function PlannerPage() {
   const finalPoint = displayed.at(-1);
   const currentAge = ageFromDob(inputs.dateOfBirth);
   const endAge = finalPoint?.age ?? currentAge;
-  const endYear = finalPoint?.year ?? new Date().getFullYear();
 
-  const finalNetWorthLabel = finalPoint ? format(finalPoint.netWorth) : "—";
+  const finalNetWorthLabel = finalPoint ? withSymbolSpace(format(finalPoint.netWorth)) : "—";
   const basisLabel = viewMode === "real" ? "in today's money" : "in future money";
 
   const netWorthTrend =
     finalPoint && finalPoint.netWorth >= (inputs.startAssets - inputs.startDebt) ? "up" : "down";
+
+  // Stat-card derivations: compute today's balance directly from inputs (so
+  // the card stays correct even when the projection treats a same-year
+  // debtEndYear as already settled). Real CAGR always uses the deflated
+  // series, regardless of viewMode, so it stays inflation-adjusted.
+  const netWorthToday = computeCurrentNetWorth(inputs);
+  const retirementPoint =
+    inputs.retirementAge <= currentAge
+      ? null
+      : (displayed.find((p) => p.age === inputs.retirementAge) ?? null);
+  const realFinal = useMemo(() => {
+    const real = deflateToToday(nominal, inputs.inflationRate, startYear);
+    return real.at(-1) ?? null;
+  }, [nominal, inputs.inflationRate, startYear]);
+  const yearsRun = displayed.length > 0 ? displayed.length - 1 : 0;
+  const realCAGR =
+    realFinal != null ? computeRealCAGR(netWorthToday, realFinal.netWorth, yearsRun) : null;
+  const cashFlowRatio = computeAnnualCashFlowRatio(inputs);
 
   // Surface the earliest point where liquid assets (portfolio + cash) turn
   // negative, so we can warn the user that non-liquid or real-estate assets
@@ -59,7 +87,39 @@ export function PlannerPage() {
   return (
     <main className="mx-auto max-w-6xl px-6 pb-16">
       <section className="mb-8 grid gap-4 sm:grid-cols-3">
-        <StatCard eyebrow="Current age" value={currentAge.toString()} />
+        <StatCard
+          eyebrow="Net worth today"
+          value={withSymbolSpace(format(netWorthToday))}
+          negative={netWorthToday < 0}
+        />
+        <StatCard
+          eyebrow={
+            <>
+              Net worth at retirement (age {inputs.retirementAge})
+              <br />
+              {basisLabel}
+            </>
+          }
+          value={
+            inputs.retirementAge <= currentAge
+              ? "—"
+              : retirementPoint
+                ? withSymbolSpace(format(retirementPoint.netWorth))
+                : "—"
+          }
+          negative={
+            inputs.retirementAge > currentAge &&
+            retirementPoint != null &&
+            retirementPoint.netWorth < 0
+          }
+          footnote={
+            inputs.retirementAge <= currentAge
+              ? "Already retired"
+              : cashFlowRatio == null
+                ? "—"
+                : `Saving ${(cashFlowRatio * 100).toFixed(0)}% of cash flow`
+          }
+        />
         <StatCard
           eyebrow={
             <>
@@ -70,8 +130,9 @@ export function PlannerPage() {
           }
           value={finalNetWorthLabel}
           accent={netWorthTrend === "up" ? "teal" : "coral"}
+          negative={finalPoint != null && finalPoint.netWorth < 0}
+          footnote={realCAGR == null ? "—" : `Real CAGR ${(realCAGR * 100).toFixed(1)}%`}
         />
-        <StatCard eyebrow="Projection ends" value={`Age ${endAge}`} hint={`in ${endYear}`} />
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[minmax(0,400px)_1fr] lg:items-start lg:min-h-[200vh]">
@@ -222,12 +283,33 @@ type StatCardProps = {
   eyebrow: ReactNode;
   value: string;
   hint?: string;
-  accent?: "teal" | "coral" | "none";
+  footnote?: ReactNode;
+  accent?: "teal" | "coral" | "danger" | "none";
+  // When true, the headline value (sign + symbol + digits) is rendered in
+  // the danger red and the accent bar is forced to match — so a negative
+  // net worth pops both at the value and along the card edge, regardless
+  // of whatever trend-driven accent was passed in.
+  negative?: boolean;
 };
 
-function StatCard({ eyebrow, value, hint, accent = "none" }: StatCardProps) {
+function StatCard({
+  eyebrow,
+  value,
+  hint,
+  footnote,
+  accent = "none",
+  negative = false
+}: StatCardProps) {
+  const effectiveAccent = negative ? "danger" : accent;
   const accentVar =
-    accent === "teal" ? "var(--teal)" : accent === "coral" ? "var(--coral)" : "var(--border)";
+    effectiveAccent === "teal"
+      ? "var(--teal)"
+      : effectiveAccent === "coral"
+        ? "var(--coral)"
+        : effectiveAccent === "danger"
+          ? "var(--danger)"
+          : "var(--border)";
+  const valueColor = negative ? "text-[var(--danger)]" : "text-[var(--navy)]";
   return (
     <div className="card relative flex h-full flex-col overflow-hidden p-5">
       <div
@@ -237,8 +319,13 @@ function StatCard({ eyebrow, value, hint, accent = "none" }: StatCardProps) {
       />
       <div className="eyebrow">{eyebrow}</div>
       <div className="mt-auto flex items-baseline gap-2 pt-2">
-        <div className="font-display text-3xl text-[var(--navy)]">{value}</div>
+        <div className={`font-display text-3xl ${valueColor}`}>{value}</div>
         {hint ? <div className="text-sm text-[var(--ink-soft)]">{hint}</div> : null}
+      </div>
+      {/* Footnote slot is always rendered so the value row sits at the same
+          vertical position whether or not a card has subtext. */}
+      <div className="mt-1 text-xs tabular-nums text-[var(--ink-muted)]">
+        {footnote ?? "\u00A0"}
       </div>
     </div>
   );

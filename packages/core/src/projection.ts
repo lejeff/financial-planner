@@ -17,6 +17,63 @@ export function clampHorizon(horizonYears: number, min = 10, max = 80): number {
 }
 
 /**
+ * Sum the user's reported balance-sheet today: every asset bucket minus
+ * outstanding debt. We compute this directly from inputs (rather than reading
+ * `points[0].netWorth`) so it stays correct when `debtEndYear <= startYear`,
+ * since the projection treats already-due loans as settled at year 0.
+ */
+export function computeCurrentNetWorth(input: PlanInputs): number {
+  return (
+    input.startAssets +
+    input.cashBalance +
+    input.nonLiquidInvestments +
+    input.otherFixedAssets +
+    input.primaryResidenceValue +
+    input.otherPropertyValue -
+    input.startDebt
+  );
+}
+
+/**
+ * Annual cash-flow ratio: the share of total inflows left after recurring
+ * spending, expressed as a fraction.
+ *
+ *   inflows  = annualIncome + rentalIncome + startAssets * nominalReturn
+ *   outflows = monthlySpending * 12
+ *   ratio    = (inflows - outflows) / inflows
+ *
+ * `startAssets * nominalReturn` is a year-1 estimate of portfolio earnings;
+ * cashBalance is excluded because it does not compound in the projection. We
+ * intentionally leave debt servicing out — this ratio answers "how much of
+ * your gross cash flow is left over after living costs?", not "how much
+ * truly free cash do you have?". Returns null when total inflows are zero
+ * (so the UI can render a placeholder instead of dividing by zero). A
+ * negative value means recurring expenses exceed inflows, which is
+ * meaningful information to surface.
+ */
+export function computeAnnualCashFlowRatio(input: PlanInputs): number | null {
+  const portfolioEarnings = input.startAssets * input.nominalReturn;
+  const inflows = input.annualIncome + input.rentalIncome + portfolioEarnings;
+  if (inflows <= 0) return null;
+  const outflows = input.monthlySpending * 12;
+  return (inflows - outflows) / inflows;
+}
+
+/**
+ * Real (inflation-adjusted) compounded annual growth rate between two
+ * real-money endpoints. Returns null when either endpoint is non-positive or
+ * the horizon is zero, since CAGR is undefined in those cases.
+ */
+export function computeRealCAGR(
+  startNetWorth: number,
+  endRealNetWorth: number,
+  years: number
+): number | null {
+  if (years <= 0 || startNetWorth <= 0 || endRealNetWorth <= 0) return null;
+  return (endRealNetWorth / startNetWorth) ** (1 / years) - 1;
+}
+
+/**
  * Closed-form annual payment for a fixed-rate amortizing loan that fully
  * repays principal `P` over `n` payments at annual rate `r`. Returns 0 when
  * the loan is already fully paid (P=0 or n<=0). Falls back to a linear
