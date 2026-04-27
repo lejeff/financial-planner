@@ -8,9 +8,11 @@ import {
   MAX_APPRECIATION,
   MAX_DEBT_INTEREST_RATE,
   MAX_HORIZON_YEARS,
+  MAX_RETIREMENT_AGE,
   MIN_APPRECIATION,
   MIN_DEBT_INTEREST_RATE,
   MIN_HORIZON_YEARS,
+  MIN_RETIREMENT_AGE,
   computeOverTimeAnnualPayment,
   type DebtRepaymentType,
   type PlanInputs
@@ -26,6 +28,7 @@ type SliderKey =
   | "nominalReturn"
   | "inflationRate"
   | "horizonYears"
+  | "retirementAge"
   | "primaryResidenceRate"
   | "otherPropertyRate"
   | "rentalIncomeRate"
@@ -42,6 +45,7 @@ type SliderSpec = {
 
 const percent = (v: number) => `${(v * 100).toFixed(1)}%`;
 const years = (v: number) => `${v} year${v === 1 ? "" : "s"}`;
+const age = (v: number) => `${v}`;
 
 const NOMINAL_RETURN_SLIDER: SliderSpec = {
   key: "nominalReturn",
@@ -95,6 +99,15 @@ const HORIZON_SLIDER: SliderSpec = {
   max: MAX_HORIZON_YEARS,
   step: 1,
   format: years
+};
+
+const RETIREMENT_AGE_SLIDER: SliderSpec = {
+  key: "retirementAge",
+  label: "Retirement age",
+  min: MIN_RETIREMENT_AGE,
+  max: MAX_RETIREMENT_AGE,
+  step: 1,
+  format: age
 };
 
 const DEBT_INTEREST_RATE_SLIDER: SliderSpec = {
@@ -163,6 +176,10 @@ const ACCENT = {
   lifeEvents: "var(--violet)",
   macro: "var(--slate)"
 } as const;
+
+function summarizeAboutYou(v: PlanInputs): string {
+  return `Retire at ${v.retirementAge} · ${v.horizonYears}y horizon`;
+}
 
 function summarizeAssetsDebt(
   v: PlanInputs,
@@ -244,6 +261,7 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
           title="About you"
           accent={ACCENT.aboutYou}
           icon={<IconPerson />}
+          summary={summarizeAboutYou(value)}
           defaultOpen
         >
           <FramedField label="Date of birth">
@@ -255,6 +273,11 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
               aria-label="Date of birth"
             />
           </FramedField>
+          <SliderRow
+            spec={RETIREMENT_AGE_SLIDER}
+            value={value.retirementAge}
+            onChange={(next) => update("retirementAge", next)}
+          />
           <SliderRow
             spec={HORIZON_SLIDER}
             value={value.horizonYears}

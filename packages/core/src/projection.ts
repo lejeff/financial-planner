@@ -65,8 +65,12 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
 
       // Salary and recurring expenses are entered in today's money but the
       // projection is nominal, so inflate them to the current year's value.
+      // Salary stops the year the user reaches retirementAge (i.e. the first
+      // year `yearAge >= retirementAge`).
+      const yearAge = currentAge + i;
       const inflator = (1 + input.inflationRate) ** i;
-      const salaryNominal = input.annualIncome * inflator;
+      const salaryNominal =
+        yearAge < input.retirementAge ? input.annualIncome * inflator : 0;
       const spendingNominal = input.monthlySpending * 12 * inflator;
 
       const year = startYear + i;

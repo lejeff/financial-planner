@@ -9,6 +9,8 @@ export const MIN_APPRECIATION = -0.05;
 export const MAX_APPRECIATION = 0.1;
 export const MIN_DEBT_INTEREST_RATE = 0;
 export const MAX_DEBT_INTEREST_RATE = 0.2;
+export const MIN_RETIREMENT_AGE = 18;
+export const MAX_RETIREMENT_AGE = 100;
 
 export const DEBT_REPAYMENT_TYPES = ["overTime", "inFine"] as const;
 export type DebtRepaymentType = (typeof DEBT_REPAYMENT_TYPES)[number];
@@ -27,6 +29,7 @@ export const PlanInputsSchema = z.object({
   debtEndYear: z.number().int(),
   monthlySpending: z.number().finite().nonnegative(),
   annualIncome: z.number().finite().nonnegative(),
+  retirementAge: z.number().int().min(MIN_RETIREMENT_AGE).max(MAX_RETIREMENT_AGE),
   rentalIncome: z.number().finite().nonnegative(),
   rentalIncomeRate: z.number().finite().min(MIN_APPRECIATION).max(MAX_APPRECIATION),
   windfallAmount: z.number().finite().nonnegative(),
@@ -66,6 +69,7 @@ export const DEFAULT_PLAN_INPUTS: PlanInputs = {
   debtEndYear: new Date().getFullYear() + 15,
   monthlySpending: 5_000,
   annualIncome: 120_000,
+  retirementAge: 65,
   rentalIncome: 0,
   rentalIncomeRate: 0.02,
   windfallAmount: 0,

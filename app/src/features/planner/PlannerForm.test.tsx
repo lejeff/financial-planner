@@ -111,6 +111,20 @@ describe("PlannerForm layout", () => {
     expect(within(aboutYou).getByLabelText("Date of birth")).toBeInTheDocument();
   });
 
+  it("renders the Retirement age slider inside the About you fieldset", () => {
+    render(<Host />);
+    const aboutYou = screen.getByText("About you").closest("fieldset")!;
+    expect(within(aboutYou).getByText("Retirement age")).toBeInTheDocument();
+  });
+
+  it("shows an About you summary mentioning the retirement age once collapsed", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    // About you starts open; collapse it so the summary pill renders.
+    await user.click(screen.getByRole("button", { name: /about you/i }));
+    expect(screen.getByText(/Retire at 65/)).toBeInTheDocument();
+  });
+
   it("renders the Inflation slider inside the Macro assumptions category", async () => {
     render(<Host />);
     await expand(/macro assumptions/i);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   MAX_HORIZON_YEARS,
+  MAX_RETIREMENT_AGE,
   MIN_HORIZON_YEARS,
   ageFromDob,
   clampHorizon,
@@ -31,6 +32,7 @@ const BASE_INPUTS: PlanInputs = {
   debtEndYear: 2200,
   monthlySpending: 1_000,
   annualIncome: 50_000,
+  retirementAge: MAX_RETIREMENT_AGE,
   rentalIncome: 0,
   rentalIncomeRate: 0,
   windfallAmount: 0,
@@ -1082,5 +1084,57 @@ describe("projectNetWorth liquid field", () => {
       FIXED_NOW
     );
     for (const p of points) expect(p.liquid).toBe(50_000);
+  });
+});
+
+describe("retirementAge", () => {
+  // BASE_INPUTS uses retirementAge: MAX_RETIREMENT_AGE (100) so salary is paid
+  // across the whole horizon. These cases override it to exercise the gating.
+
+  it("matches the no-cap baseline when retirementAge exceeds the projection's end age", () => {
+    // currentAge=36, horizonYears=30 → final point age = 66, so retirementAge=67
+    // means yearAge < retirementAge is true for every year and salary is paid.
+    const baseline = projectNetWorth(BASE_INPUTS, FIXED_NOW);
+    const capped = projectNetWorth({ ...BASE_INPUTS, retirementAge: 67 }, FIXED_NOW);
+    expect(capped).toEqual(baseline);
+  });
+
+  it("never adds salary when retirementAge is at or below the current age", () => {
+    // retirementAge=36 → at i=1 yearAge=37 ≥ 36, so salary is gated off forever.
+    // Compare against an explicit annualIncome=0 baseline: the two projections
+    // must be identical point-for-point.
+    const noSalary = projectNetWorth(
+      { ...BASE_INPUTS, annualIncome: 0 },
+      FIXED_NOW
+    );
+    const retiredAlready = projectNetWorth(
+      { ...BASE_INPUTS, retirementAge: 36 },
+      FIXED_NOW
+    );
+    expect(retiredAlready).toEqual(noSalary);
+  });
+
+  it("stops adding salary at the first year the projected age reaches retirementAge", () => {
+    // currentAge=36, retirementAge=38. With i=1 (yearAge=37) salary is paid,
+    // with i=2 (yearAge=38) it is not. With every other flow zeroed out, the
+    // liquid balance bumps once at i=1 and then stays flat.
+    const points = projectNetWorth(
+      {
+        ...BASE_INPUTS,
+        startAssets: 0,
+        cashBalance: 0,
+        nominalReturn: 0,
+        inflationRate: 0,
+        monthlySpending: 0,
+        annualIncome: 50_000,
+        retirementAge: 38
+      },
+      FIXED_NOW
+    );
+    expect(points[0].liquid).toBe(0);
+    expect(points[1].liquid).toBe(50_000);
+    for (let i = 2; i < points.length; i += 1) {
+      expect(points[i].liquid).toBe(50_000);
+    }
   });
 });

@@ -46,6 +46,16 @@ describe("PlanInputsSchema", () => {
     expect(() => PlanInputsSchema.parse(bad)).toThrow();
   });
 
+  it("rejects a retirementAge below the minimum", () => {
+    const bad = { ...DEFAULT_PLAN_INPUTS, retirementAge: 17 };
+    expect(() => PlanInputsSchema.parse(bad)).toThrow();
+  });
+
+  it("rejects a retirementAge above the maximum", () => {
+    const bad = { ...DEFAULT_PLAN_INPUTS, retirementAge: 101 };
+    expect(() => PlanInputsSchema.parse(bad)).toThrow();
+  });
+
   it("strips unknown fields by default (type is a structural superset)", () => {
     // Zod's default behavior is to strip unknown keys, so this is a sanity check
     // that the schema doesn't blow up when legacy localStorage payloads carry
