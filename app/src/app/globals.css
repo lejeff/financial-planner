@@ -21,6 +21,15 @@
   --gold: #c79a3a;
   --violet: #8e6fb8;
   --slate: #6b7c95;
+
+  /* Danger/warning red — intentionally distinct from the warm `--coral`
+     accent. Tuned to read like Excel's classic negative-number red:
+     vivid, saturated, unmistakable. Used to flag genuine problems
+     (negative net worth, hard constraint violations, destructive
+     actions). Reach for this — not coral — whenever something is
+     actually wrong. */
+  --danger: #e60000;
+  --danger-soft: #ff6b6b;
 }
 
 * {

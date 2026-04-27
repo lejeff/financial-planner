@@ -1,9 +1,9 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CurrencyProvider } from "@/features/currency/CurrencyContext";
 import { PlannerPage } from "./PlannerPage";
-import { DEFAULT_PLAN_INPUTS, ageFromDob } from "@app/core";
+import { DEFAULT_PLAN_INPUTS, ageFromDob, computeCurrentNetWorth } from "@app/core";
 
 // Recharts uses ResponsiveContainer which requires layout dimensions jsdom can't
 // provide. We stub it with a fixed-size div so the chart renders a valid SVG
@@ -34,18 +34,220 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
+// Find the retirement-age slider. About you contains two sliders (horizon and
+// retirement age); we identify the retirement one by the current numeric value
+// since both have unique defaults.
+function getRetirementSlider(): HTMLInputElement {
+  const aboutYou = screen.getByText("About you").closest("fieldset")!;
+  const sliders = within(aboutYou).getAllByRole("slider") as HTMLInputElement[];
+  const found = sliders.find((s) => Number(s.value) === DEFAULT_PLAN_INPUTS.retirementAge);
+  if (!found) {
+    throw new Error("Retirement age slider not found at the default value");
+  }
+  return found;
+}
+
 describe("PlannerPage", () => {
-  it("renders the three summary cards with default values", () => {
+  it("renders the three summary cards with the new today/retirement/end narrative", () => {
     renderPage();
     const expectedAge = ageFromDob(DEFAULT_PLAN_INPUTS.dateOfBirth);
-    expect(screen.getByText("Current age")).toBeInTheDocument();
-    expect(screen.getByText(expectedAge.toString())).toBeInTheDocument();
+    const expectedEndAge = expectedAge + DEFAULT_PLAN_INPUTS.horizonYears;
+
+    // Card 1: today.
+    expect(screen.getByText("Net worth today")).toBeInTheDocument();
+
+    // Card 2: retirement milestone, with the retirement age in the eyebrow.
+    // (The cash-flow footnote is exercised in dedicated tests below.)
     expect(
       screen.getByText(
-        new RegExp(`Projected net worth at age ${expectedAge + DEFAULT_PLAN_INPUTS.horizonYears}`)
+        new RegExp(`Net worth at retirement \\(age ${DEFAULT_PLAN_INPUTS.retirementAge}\\)`)
       )
     ).toBeInTheDocument();
-    expect(screen.getByText("Projection ends")).toBeInTheDocument();
+
+    // Card 3: end-of-horizon outcome with a Real CAGR footnote. Defaults grow
+    // 10K at 5% nominal / ~2.94% real over 30y, so CAGR is positive.
+    expect(
+      screen.getByText(new RegExp(`Projected net worth at age ${expectedEndAge}`))
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Real CAGR \d+\.\d%/)).toBeInTheDocument();
+  });
+
+  it("uses the user's full balance sheet for the Net worth today card", () => {
+    renderPage();
+    const card = screen.getByText("Net worth today").closest(".card")!;
+    const expected = computeCurrentNetWorth(DEFAULT_PLAN_INPUTS);
+    // Loose match: the card should contain the expected number, ignoring the
+    // currency symbol and locale-specific separators.
+    const valueEl = card.querySelector(".font-display");
+    const numeric = Number((valueEl?.textContent ?? "").replace(/[^\d.-]/g, ""));
+    expect(numeric).toBe(expected);
+  });
+
+  it("renders an em-dash cash-flow footnote when there are no inflows at all", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    // The default plan ships with startAssets=10K earning 5%, which counts
+    // as portfolio cash flow under the new ratio. Zero it out so total
+    // inflows really are zero and the footnote falls back to em-dash.
+    const portfolio = screen.getByLabelText("Financial Assets / Portfolio") as HTMLInputElement;
+    await user.clear(portfolio);
+    await user.type(portfolio, "0");
+    await user.tab();
+
+    const card = screen
+      .getByText(
+        new RegExp(`Net worth at retirement \\(age ${DEFAULT_PLAN_INPUTS.retirementAge}\\)`)
+      )
+      .closest(".card")!;
+    expect(within(card as HTMLElement).getByText("—")).toBeInTheDocument();
+  });
+
+  it("updates the cash-flow footnote when income and spending change", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    // Income & Expenses is collapsed by default; expand before editing salary.
+    await user.click(screen.getByRole("button", { name: /income & expenses/i }));
+
+    const salary = screen.getByLabelText("Annual Salary") as HTMLInputElement;
+    await user.clear(salary);
+    await user.type(salary, "119500");
+    await user.tab();
+
+    const spending = screen.getByLabelText("Recurring monthly expenses") as HTMLInputElement;
+    await user.clear(spending);
+    await user.type(spending, "5000");
+    await user.tab();
+
+    // inflows = salary 119500 + portfolio 10000 * 5% = 120000
+    // outflows = 5000 * 12 = 60000 → (120000 - 60000)/120000 = 50%
+    expect(screen.getByText("Saving 50% of cash flow")).toBeInTheDocument();
+  });
+
+  it("counts portfolio earnings as inflow on the default plan (Saving 100% of cash flow)", () => {
+    renderPage();
+    // Defaults: startAssets=10K, nominalReturn=5%, annualIncome=0, monthlySpending=0,
+    // rentalIncome=0 → inflows=$500, outflows=$0 → 100%.
+    expect(screen.getByText("Saving 100% of cash flow")).toBeInTheDocument();
+  });
+
+  it("renders the Net worth today value in coral when the user is underwater", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    // Assets and Debt is open by default, but the Debt subsection inside it
+    // is collapsed; expand it and push debt past the default 10K asset
+    // balance to flip net worth negative.
+    await user.click(screen.getByRole("button", { name: /^debt$/i }));
+
+    const debt = screen.getByLabelText("Debt") as HTMLInputElement;
+    await user.clear(debt);
+    await user.type(debt, "50000");
+    await user.tab();
+
+    const card = screen.getByText("Net worth today").closest(".card") as HTMLElement;
+    const valueEl = card.querySelector(".font-display") as HTMLElement;
+    expect(valueEl.textContent).toMatch(/-/);
+    expect(valueEl.className).toContain("text-[var(--danger)]");
+    expect(valueEl.className).not.toContain("text-[var(--navy)]");
+  });
+
+  it("renders the Net worth today value in navy when net worth is non-negative", () => {
+    renderPage();
+    const card = screen.getByText("Net worth today").closest(".card") as HTMLElement;
+    const valueEl = card.querySelector(".font-display") as HTMLElement;
+    expect(valueEl.className).toContain("text-[var(--navy)]");
+    expect(valueEl.className).not.toContain("text-[var(--danger)]");
+  });
+
+  it("flips the accent bars on cards 2 and 3 to danger red when their values go negative", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    // High monthly expenses against zero income drains the projection so
+    // both the retirement and end-of-plan cards run negative — without
+    // depending on debt-amortization mechanics.
+    await user.click(screen.getByRole("button", { name: /income & expenses/i }));
+    const expenses = screen.getByLabelText("Recurring monthly expenses") as HTMLInputElement;
+    await user.clear(expenses);
+    await user.type(expenses, "10000");
+    await user.tab();
+
+    for (const eyebrow of ["Net worth at retirement", "Projected net worth at age"]) {
+      const card = screen.getByText(new RegExp(eyebrow)).closest(".card") as HTMLElement;
+      const valueEl = card.querySelector(".font-display") as HTMLElement;
+      // Sanity: the value must actually be negative, otherwise the
+      // accent assertion below would not exercise the new override.
+      expect(valueEl.textContent).toMatch(/-/);
+      const accentBar = card.firstElementChild as HTMLElement;
+      expect(accentBar.style.background).toBe("var(--danger)");
+    }
+  });
+
+  it("does not paint the accent bars danger on the default (positive) plan", () => {
+    renderPage();
+    for (const eyebrow of [
+      "Net worth today",
+      "Net worth at retirement",
+      "Projected net worth at age"
+    ]) {
+      const card = screen.getByText(new RegExp(eyebrow)).closest(".card") as HTMLElement;
+      const accentBar = card.firstElementChild as HTMLElement;
+      expect(accentBar.style.background).not.toBe("var(--danger)");
+    }
+  });
+
+  it("falls back to em-dash on the retirement card when retirement is beyond the horizon", () => {
+    renderPage();
+    const slider = getRetirementSlider();
+    // currentAge ~= 40 with default DOB; horizon is 30, so the projection
+    // ends at age 70. Push retirement past that.
+    fireEvent.change(slider, { target: { value: "80" } });
+
+    const card = screen.getByText(/Net worth at retirement \(age 80\)/).closest(".card")!;
+    const value = card.querySelector(".font-display");
+    expect(value?.textContent).toBe("—");
+  });
+
+  it("renders an Already retired footnote when retirement age is at or below current age", () => {
+    renderPage();
+    const slider = getRetirementSlider();
+    // currentAge ~= 40 from the default DOB; pull retirement age below it.
+    fireEvent.change(slider, { target: { value: "30" } });
+
+    const card = screen.getByText(/Net worth at retirement \(age 30\)/).closest(".card")!;
+    expect(within(card as HTMLElement).getByText("Already retired")).toBeInTheDocument();
+  });
+
+  it("shows the basis label on the retirement card and follows the view-mode toggle", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const getRetirementCard = () =>
+      screen
+        .getByText(
+          new RegExp(`Net worth at retirement \\(age ${DEFAULT_PLAN_INPUTS.retirementAge}\\)`)
+        )
+        .closest(".card")! as HTMLElement;
+
+    expect(within(getRetirementCard()).getByText(/in today's money/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: "Future money" }));
+    expect(within(getRetirementCard()).getByText(/in future money/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: "Today's money" }));
+    expect(within(getRetirementCard()).getByText(/in today's money/i)).toBeInTheDocument();
+  });
+
+  it("keeps the Real CAGR footnote stable when toggling Today's vs Future money", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const before = screen.getByText(/Real CAGR \d+\.\d%/).textContent;
+
+    await user.click(screen.getByRole("radio", { name: "Future money" }));
+    const afterFuture = screen.getByText(/Real CAGR \d+\.\d%/).textContent;
+    expect(afterFuture).toBe(before);
+
+    await user.click(screen.getByRole("radio", { name: "Today's money" }));
+    const afterToday = screen.getByText(/Real CAGR \d+\.\d%/).textContent;
+    expect(afterToday).toBe(before);
   });
 
   it("renders the three top-level categories and the form heading", () => {

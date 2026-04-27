@@ -15,7 +15,10 @@ export type { DebtRepaymentType, PlanInputs, ProjectionPoint } from "./planInput
 export {
   ageFromDob,
   clampHorizon,
+  computeAnnualCashFlowRatio,
+  computeCurrentNetWorth,
   computeOverTimeAnnualPayment,
+  computeRealCAGR,
   deflateToToday,
   projectNetWorth
 } from "./projection";

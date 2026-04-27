@@ -5,6 +5,9 @@ import {
   MIN_HORIZON_YEARS,
   ageFromDob,
   clampHorizon,
+  computeAnnualCashFlowRatio,
+  computeCurrentNetWorth,
+  computeRealCAGR,
   deflateToToday,
   projectNetWorth,
   type PlanInputs,
@@ -86,6 +89,173 @@ describe("clampHorizon", () => {
     expect(clampHorizon(Number.NaN)).toBe(MIN_HORIZON_YEARS);
     expect(clampHorizon(Number.POSITIVE_INFINITY)).toBe(MIN_HORIZON_YEARS);
     expect(clampHorizon(Number.NEGATIVE_INFINITY)).toBe(MIN_HORIZON_YEARS);
+  });
+});
+
+describe("computeCurrentNetWorth", () => {
+  it("sums every balance-sheet field and subtracts debt", () => {
+    const filled: PlanInputs = {
+      ...BASE_INPUTS,
+      startAssets: 100_000,
+      cashBalance: 20_000,
+      nonLiquidInvestments: 30_000,
+      otherFixedAssets: 5_000,
+      primaryResidenceValue: 400_000,
+      otherPropertyValue: 50_000,
+      startDebt: 60_000
+    };
+    expect(computeCurrentNetWorth(filled)).toBe(545_000);
+  });
+
+  it("ignores debtEndYear when computing today's balance", () => {
+    // The projection treats debt with `debtEndYear <= startYear` as already
+    // settled (debtBalance starts at 0), so points[0].netWorth would omit the
+    // entered debt. The helper must reflect the user's reported balance sheet
+    // regardless.
+    const settledLoan: PlanInputs = {
+      ...BASE_INPUTS,
+      startAssets: 200_000,
+      startDebt: 50_000,
+      debtEndYear: 2000
+    };
+    expect(computeCurrentNetWorth(settledLoan)).toBe(150_000);
+  });
+
+  it("returns zero when every balance is zero", () => {
+    const empty: PlanInputs = {
+      ...BASE_INPUTS,
+      startAssets: 0,
+      cashBalance: 0,
+      nonLiquidInvestments: 0,
+      otherFixedAssets: 0,
+      primaryResidenceValue: 0,
+      otherPropertyValue: 0,
+      startDebt: 0
+    };
+    expect(computeCurrentNetWorth(empty)).toBe(0);
+  });
+
+  it("can return a negative number when debt exceeds assets", () => {
+    const underwater: PlanInputs = {
+      ...BASE_INPUTS,
+      startAssets: 10_000,
+      cashBalance: 0,
+      nonLiquidInvestments: 0,
+      otherFixedAssets: 0,
+      primaryResidenceValue: 0,
+      otherPropertyValue: 0,
+      startDebt: 25_000
+    };
+    expect(computeCurrentNetWorth(underwater)).toBe(-15_000);
+  });
+});
+
+describe("computeAnnualCashFlowRatio", () => {
+  it("computes the rate from salary alone when there are no other inflows", () => {
+    const inputs: PlanInputs = {
+      ...BASE_INPUTS,
+      startAssets: 0,
+      annualIncome: 120_000,
+      monthlySpending: 5_000
+    };
+    // (120000 - 60000) / 120000 = 0.5
+    money(computeAnnualCashFlowRatio(inputs)!, 0.5);
+  });
+
+  it("includes rental income in the inflow denominator", () => {
+    const inputs: PlanInputs = {
+      ...BASE_INPUTS,
+      startAssets: 0,
+      annualIncome: 100_000,
+      rentalIncome: 20_000,
+      monthlySpending: 5_000
+    };
+    // inflows = 120000, outflows = 60000 → 0.5
+    money(computeAnnualCashFlowRatio(inputs)!, 0.5);
+  });
+
+  it("includes year-1 portfolio earnings (startAssets * nominalReturn) in inflows", () => {
+    const inputs: PlanInputs = {
+      ...BASE_INPUTS,
+      startAssets: 100_000,
+      nominalReturn: 0.05,
+      annualIncome: 95_000,
+      monthlySpending: 5_000
+    };
+    // inflows = 95000 + 0 + 100000 * 0.05 = 100000
+    // outflows = 60000 → ratio = 0.4
+    money(computeAnnualCashFlowRatio(inputs)!, 0.4);
+  });
+
+  it("excludes cashBalance from earnings (cash does not compound)", () => {
+    const inputs: PlanInputs = {
+      ...BASE_INPUTS,
+      startAssets: 0,
+      cashBalance: 1_000_000,
+      nominalReturn: 0.05,
+      annualIncome: 100_000,
+      monthlySpending: 5_000
+    };
+    // inflows = 100000 (cashBalance contributes nothing), outflows = 60000 → 0.4
+    money(computeAnnualCashFlowRatio(inputs)!, 0.4);
+  });
+
+  it("returns null when total inflows are zero", () => {
+    const inputs: PlanInputs = {
+      ...BASE_INPUTS,
+      startAssets: 0,
+      annualIncome: 0,
+      rentalIncome: 0
+    };
+    expect(computeAnnualCashFlowRatio(inputs)).toBeNull();
+  });
+
+  it("returns null when nominalReturn is zero and salary/rental are zero", () => {
+    const inputs: PlanInputs = {
+      ...BASE_INPUTS,
+      startAssets: 100_000,
+      nominalReturn: 0,
+      annualIncome: 0,
+      rentalIncome: 0
+    };
+    expect(computeAnnualCashFlowRatio(inputs)).toBeNull();
+  });
+
+  it("returns a negative rate when spending exceeds total inflows", () => {
+    const inputs: PlanInputs = {
+      ...BASE_INPUTS,
+      startAssets: 0,
+      annualIncome: 60_000,
+      monthlySpending: 6_000
+    };
+    // (60000 - 72000) / 60000 = -0.2
+    money(computeAnnualCashFlowRatio(inputs)!, -0.2);
+  });
+});
+
+describe("computeRealCAGR", () => {
+  it("matches the closed-form (end/start)^(1/y) - 1", () => {
+    const cagr = computeRealCAGR(100_000, 250_000, 20)!;
+    money(cagr, (250_000 / 100_000) ** (1 / 20) - 1);
+  });
+
+  it("returns null when the start net worth is non-positive", () => {
+    expect(computeRealCAGR(0, 100_000, 10)).toBeNull();
+    expect(computeRealCAGR(-1, 100_000, 10)).toBeNull();
+  });
+
+  it("returns null when the end net worth is non-positive", () => {
+    expect(computeRealCAGR(100_000, 0, 10)).toBeNull();
+    expect(computeRealCAGR(100_000, -50_000, 10)).toBeNull();
+  });
+
+  it("returns null when years is zero or negative", () => {
+    expect(computeRealCAGR(100_000, 200_000, 0)).toBeNull();
+    expect(computeRealCAGR(100_000, 200_000, -5)).toBeNull();
+  });
+
+  it("returns zero when start equals end (no growth)", () => {
+    money(computeRealCAGR(100_000, 100_000, 30)!, 0);
   });
 });
 
