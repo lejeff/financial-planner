@@ -36,7 +36,6 @@ type SliderKey =
   | "inflationRate"
   | "horizonYears"
   | "retirementAge"
-  | "rentalIncomeRate"
   | "debtInterestRate"
   | "debtEndYear"
   | "nonLiquidLiquidityYear"
@@ -82,15 +81,6 @@ const NOMINAL_RETURN_SLIDER: SliderSpec = {
   format: percent
 };
 
-const RENTAL_INCOME_RATE_SLIDER: SliderSpec = {
-  key: "rentalIncomeRate",
-  label: "Rental income annual appreciation",
-  min: MIN_APPRECIATION,
-  max: MAX_APPRECIATION,
-  step: 0.001,
-  format: percent
-};
-
 const INFLATION_SLIDER: SliderSpec = {
   key: "inflationRate",
   label: "Inflation",
@@ -132,7 +122,6 @@ type AmountKey =
   | "startDebt"
   | "monthlySpending"
   | "annualIncome"
-  | "rentalIncome"
   | "cashBalance"
   | "nonLiquidInvestments"
   | "otherFixedAssets";
@@ -192,8 +181,7 @@ function summarizeIncomeExpenses(
   v: PlanInputs,
   formatCompact: (n: number) => string
 ): string {
-  const annual = v.annualIncome + v.rentalIncome;
-  return `${formatCompact(annual)}/yr income · ${formatCompact(v.monthlySpending)}/mo expenses`;
+  return `${formatCompact(v.annualIncome)}/yr income · ${formatCompact(v.monthlySpending)}/mo expenses`;
 }
 
 function summarizeRealEstate(
@@ -503,18 +491,6 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
           summary={summarizeIncomeExpenses(value, formatCompact)}
         >
           {renderAmounts(INCOME_EXPENSE_AMOUNTS)}
-          <CurrencyField
-            label="Annual Rental Income"
-            value={value.rentalIncome}
-            onChange={(next) => update("rentalIncome", next)}
-            min={0}
-            max={10_000_000}
-          />
-          <SliderRow
-            spec={RENTAL_INCOME_RATE_SLIDER}
-            value={value.rentalIncomeRate}
-            onChange={(next) => update("rentalIncomeRate", next)}
-          />
           <CurrencyField
             label="Recurring monthly expenses"
             value={value.monthlySpending}

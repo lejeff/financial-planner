@@ -69,14 +69,18 @@ describe("PlannerForm layout", () => {
     expect(within(debt).getByLabelText("Debt")).toBeInTheDocument();
   });
 
-  it("renders every Income & Expenses field including the new ones", async () => {
+  it("renders only Annual Salary + Recurring monthly expenses in Income & Expenses (rental moved to holdings)", async () => {
     render(<Host />);
     await expand(/income & expenses/i);
     const fs = screen.getByText("Income & Expenses").closest("fieldset")!;
     expect(within(fs).getByLabelText("Annual Salary")).toBeInTheDocument();
-    expect(within(fs).getByLabelText("Annual Rental Income")).toBeInTheDocument();
-    expect(within(fs).getByText("Rental income annual appreciation")).toBeInTheDocument();
     expect(within(fs).getByLabelText("Recurring monthly expenses")).toBeInTheDocument();
+    // Global rental income/rate fields are gone; rental now lives on each
+    // RealEstateHolding card under Real Estate.
+    expect(within(fs).queryByLabelText("Annual Rental Income")).toBeNull();
+    expect(
+      within(fs).queryByText("Rental income annual appreciation")
+    ).toBeNull();
   });
 
   it("renders an empty Life Events category with both Add buttons by default", async () => {

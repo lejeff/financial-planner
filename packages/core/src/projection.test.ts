@@ -39,8 +39,6 @@ const BASE_INPUTS: PlanInputs = {
   monthlySpending: 1_000,
   annualIncome: 50_000,
   retirementAge: MAX_RETIREMENT_AGE,
-  rentalIncome: 0,
-  rentalIncomeRate: 0,
   nominalReturn: 0.05,
   inflationRate: 0,
   horizonYears: 30,
@@ -220,15 +218,18 @@ describe("computeAnnualCashFlowRatio", () => {
     money(computeAnnualCashFlowRatio(inputs)!, 0.5);
   });
 
-  it("includes rental income in the inflow denominator", () => {
+  it("includes per-holding rental income in the inflow denominator", () => {
     const inputs: PlanInputs = {
       ...BASE_INPUTS,
       startAssets: 0,
       annualIncome: 100_000,
-      rentalIncome: 20_000,
+      realEstateHoldings: [
+        makeHolding({ annualRentalIncome: 12_000 }),
+        makeHolding({ annualRentalIncome: 8_000 })
+      ],
       monthlySpending: 5_000
     };
-    // inflows = 120000, outflows = 60000 → 0.5
+    // inflows = 100K + (12K + 8K) = 120K, outflows = 60K → 0.5
     money(computeAnnualCashFlowRatio(inputs)!, 0.5);
   });
 
@@ -262,19 +263,17 @@ describe("computeAnnualCashFlowRatio", () => {
     const inputs: PlanInputs = {
       ...BASE_INPUTS,
       startAssets: 0,
-      annualIncome: 0,
-      rentalIncome: 0
+      annualIncome: 0
     };
     expect(computeAnnualCashFlowRatio(inputs)).toBeNull();
   });
 
-  it("returns null when nominalReturn is zero and salary/rental are zero", () => {
+  it("returns null when nominalReturn is zero and salary/holdings rental are zero", () => {
     const inputs: PlanInputs = {
       ...BASE_INPUTS,
       startAssets: 100_000,
       nominalReturn: 0,
-      annualIncome: 0,
-      rentalIncome: 0
+      annualIncome: 0
     };
     expect(computeAnnualCashFlowRatio(inputs)).toBeNull();
   });
@@ -594,58 +593,6 @@ describe("projectNetWorth", () => {
     }
   });
 
-  it("adds rental income to the netFlow at year 1", () => {
-    const points = projectNetWorth(
-      {
-        ...BASE_INPUTS,
-        startAssets: 0,
-        annualIncome: 0,
-        monthlySpending: 0,
-        nominalReturn: 0,
-        rentalIncome: 20_000,
-        rentalIncomeRate: 0
-      },
-      FIXED_NOW
-    );
-    expect(points[0].netWorth).toBe(0);
-    money(points[1].netWorth, 20_000);
-    money(points[2].netWorth, 40_000);
-  });
-
-  it("grows rental income at its own rate each subsequent year", () => {
-    const points = projectNetWorth(
-      {
-        ...BASE_INPUTS,
-        startAssets: 0,
-        annualIncome: 0,
-        monthlySpending: 0,
-        nominalReturn: 0,
-        rentalIncome: 10_000,
-        rentalIncomeRate: 0.1
-      },
-      FIXED_NOW
-    );
-    money(points[1].netWorth, 11_000);
-    money(points[2].netWorth, 23_100);
-    money(points[3].netWorth, 36_410);
-  });
-
-  it("keeps rental income flat when its rate is zero", () => {
-    const points = projectNetWorth(
-      {
-        ...BASE_INPUTS,
-        startAssets: 0,
-        annualIncome: 0,
-        monthlySpending: 0,
-        nominalReturn: 0,
-        rentalIncome: 5_000,
-        rentalIncomeRate: 0
-      },
-      FIXED_NOW
-    );
-    for (let i = 1; i <= 5; i += 1) money(points[i].netWorth, 5_000 * i);
-  });
-
   it("flows per-holding rental into liquid and compounds at the per-holding rate", () => {
     // Two holdings with independent rental streams: holding A at 10K with
     // 10% annual growth, holding B at 5K flat. Each year's net worth gain
@@ -658,8 +605,6 @@ describe("projectNetWorth", () => {
         annualIncome: 0,
         monthlySpending: 0,
         nominalReturn: 0,
-        rentalIncome: 0,
-        rentalIncomeRate: 0,
         realEstateHoldings: [
           makeHolding({
             value: 0,
@@ -685,7 +630,7 @@ describe("projectNetWorth", () => {
 
   it("does not contribute holdings rental when annualRentalIncome is zero", () => {
     // A holding with 0 rental should look identical (in liquid) to having
-    // no holding at all from a cash-flow perspective. We compare two runs.
+    // no holding at all from a cash-flow perspective.
     const withRental = projectNetWorth(
       {
         ...BASE_INPUTS,
@@ -693,8 +638,6 @@ describe("projectNetWorth", () => {
         annualIncome: 0,
         monthlySpending: 0,
         nominalReturn: 0,
-        rentalIncome: 0,
-        rentalIncomeRate: 0,
         realEstateHoldings: [
           makeHolding({ value: 200_000, appreciationRate: 0 })
         ]
@@ -861,7 +804,10 @@ describe("projectNetWorth", () => {
     expect(points[6].netWorth).toBe(125_000);
   });
 
-  it("excludes rental income from direct net-worth contribution", () => {
+  it("excludes per-holding rental from direct year-0 net-worth contribution", () => {
+    // Rental flows belong in netFlow (year 1+); year 0 should reflect only
+    // start balances. A holding with high rental but zero value should not
+    // tip the year-0 net worth above zero.
     const points = projectNetWorth(
       {
         ...BASE_INPUTS,
@@ -869,8 +815,9 @@ describe("projectNetWorth", () => {
         annualIncome: 0,
         monthlySpending: 0,
         nominalReturn: 0,
-        rentalIncome: 50_000,
-        rentalIncomeRate: 0
+        realEstateHoldings: [
+          makeHolding({ value: 0, annualRentalIncome: 50_000 })
+        ]
       },
       FIXED_NOW
     );
@@ -1356,7 +1303,6 @@ describe("projectNetWorth — non-liquid liquidity year", () => {
     cashBalance: 0,
     annualIncome: 0,
     monthlySpending: 0,
-    rentalIncome: 0,
     inflationRate: 0
   };
 
@@ -1624,8 +1570,6 @@ describe("real estate investment events", () => {
     annualIncome: 0,
     monthlySpending: 0,
     nominalReturn: 0,
-    rentalIncome: 0,
-    rentalIncomeRate: 0,
     inflationRate: 0
   };
 

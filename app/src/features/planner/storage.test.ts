@@ -51,6 +51,28 @@ describe("loadInputs", () => {
     expect(loadInputs()).toEqual(DEFAULT_PLAN_INPUTS);
   });
 
+  it("loads a legacy plan with global rentalIncome / rentalIncomeRate harmlessly", () => {
+    // Pre-Task-2 plans persisted `rentalIncome` and `rentalIncomeRate` at
+    // the top of PlanInputs. After the clean break the engine no longer
+    // reads them. The user's other settings (and per-holding rental, if
+    // any) survive untouched; the projection ignores the orphaned keys.
+    const legacy = JSON.stringify({
+      ...DEFAULT_PLAN_INPUTS,
+      rentalIncome: 24_000,
+      rentalIncomeRate: 0.03,
+      annualIncome: 80_000,
+      monthlySpending: 2_000
+    });
+    stubStorage({ "planner.inputs.v1": legacy });
+
+    const loaded = loadInputs();
+    expect(loaded.annualIncome).toBe(80_000);
+    expect(loaded.monthlySpending).toBe(2_000);
+    // realEstateHoldings stays at default ([]); legacy global rental
+    // contributes nothing to the new per-holding wiring.
+    expect(loaded.realEstateHoldings).toEqual([]);
+  });
+
   it("hydrates a legacy plan (no events field) with an empty events array", () => {
     // Snapshot of a real legacy payload: every PlanInputs field but `events`.
     const legacy = JSON.stringify({

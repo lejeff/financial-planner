@@ -126,7 +126,7 @@ describe("PlannerPage", () => {
   it("counts portfolio earnings as inflow on the default plan (Saving 100% of cash flow)", () => {
     renderPage();
     // Defaults: startAssets=10K, nominalReturn=5%, annualIncome=0, monthlySpending=0,
-    // rentalIncome=0 → inflows=$500, outflows=$0 → 100%.
+    // realEstateHoldings=[] (no rental) → inflows=$500, outflows=$0 → 100%.
     expect(screen.getByText("Saving 100% of cash flow")).toBeInTheDocument();
   });
 
