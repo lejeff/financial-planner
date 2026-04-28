@@ -12,6 +12,7 @@ import {
   projectNetWorth,
   type PlanInputs,
   type ProjectionPoint,
+  type RealEstateHolding,
   type RealEstateInvestmentEvent
 } from "./index";
 
@@ -47,18 +48,31 @@ const BASE_INPUTS: PlanInputs = {
   cashBalance: 0,
   nonLiquidInvestments: 0,
   otherFixedAssets: 0,
-  primaryResidenceValue: 0,
-  otherPropertyValue: 0,
-  primaryResidenceRate: 0,
-  otherPropertyRate: 0,
   // Both default to 2200 so non-liquid balances stay non-liquid throughout
   // the projection horizon and tests that don't care about liquidity timing
   // keep their original behavior. Tests that DO exercise the transfer
   // override these fields explicitly.
   nonLiquidLiquidityYear: 2200,
   otherFixedLiquidityYear: 2200,
+  realEstateHoldings: [],
   events: []
 };
+
+// Compact factory for real-estate holdings in projection tests. Fixed ids
+// (`reh-1`, `reh-2`, ...) so failures point at a specific holding.
+let rehCounter = 0;
+function makeHolding(
+  overrides: Partial<RealEstateHolding> = {}
+): RealEstateHolding {
+  rehCounter += 1;
+  return {
+    id: `reh-${rehCounter}`,
+    type: "realEstateHolding",
+    value: 0,
+    appreciationRate: 0,
+    ...overrides
+  };
+}
 
 // Compact factory for RE investment events in projection tests. We use
 // fixed ids (re-1, re-2, ...) so failures point at a specific event.
@@ -127,8 +141,10 @@ describe("computeCurrentNetWorth", () => {
       cashBalance: 20_000,
       nonLiquidInvestments: 30_000,
       otherFixedAssets: 5_000,
-      primaryResidenceValue: 400_000,
-      otherPropertyValue: 50_000,
+      realEstateHoldings: [
+        makeHolding({ value: 400_000 }),
+        makeHolding({ value: 50_000 })
+      ],
       startDebt: 60_000
     };
     expect(computeCurrentNetWorth(filled)).toBe(545_000);
@@ -155,8 +171,7 @@ describe("computeCurrentNetWorth", () => {
       cashBalance: 0,
       nonLiquidInvestments: 0,
       otherFixedAssets: 0,
-      primaryResidenceValue: 0,
-      otherPropertyValue: 0,
+      realEstateHoldings: [],
       startDebt: 0
     };
     expect(computeCurrentNetWorth(empty)).toBe(0);
@@ -169,8 +184,7 @@ describe("computeCurrentNetWorth", () => {
       cashBalance: 0,
       nonLiquidInvestments: 0,
       otherFixedAssets: 0,
-      primaryResidenceValue: 0,
-      otherPropertyValue: 0,
+      realEstateHoldings: [],
       startDebt: 25_000
     };
     expect(computeCurrentNetWorth(underwater)).toBe(-15_000);
@@ -393,8 +407,10 @@ describe("projectNetWorth", () => {
         cashBalance: 25_000,
         nonLiquidInvestments: 50_000,
         otherFixedAssets: 10_000,
-        primaryResidenceValue: 400_000,
-        otherPropertyValue: 150_000,
+        realEstateHoldings: [
+          makeHolding({ value: 400_000 }),
+          makeHolding({ value: 150_000 })
+        ],
         startDebt: 80_000
       },
       FIXED_NOW
@@ -402,9 +418,9 @@ describe("projectNetWorth", () => {
     expect(points[0].netWorth).toBe(100_000 + 25_000 + 50_000 + 10_000 + 400_000 + 150_000 - 80_000);
   });
 
-  it("compounds primary residence at its own rate and ignores spending shortfalls", () => {
+  it("compounds a held property at its own rate and ignores spending shortfalls", () => {
     // No income, no cash, no starting assets, no return — only a pure −120k/yr drag
-    // on financial assets. Residence must still compound at 4% and contribute fully.
+    // on financial assets. The holding must still compound at 4% and contribute fully.
     const points = projectNetWorth(
       {
         ...BASE_INPUTS,
@@ -413,8 +429,9 @@ describe("projectNetWorth", () => {
         annualIncome: 0,
         monthlySpending: 10_000,
         nominalReturn: 0,
-        primaryResidenceValue: 500_000,
-        primaryResidenceRate: 0.04
+        realEstateHoldings: [
+          makeHolding({ value: 500_000, appreciationRate: 0.04 })
+        ]
       },
       FIXED_NOW
     );
@@ -423,17 +440,17 @@ describe("projectNetWorth", () => {
     money(points[10].netWorth, residenceAt10 + assetsAt10, 0.5);
   });
 
-  it("grows primary residence and other property at independent rates", () => {
+  it("grows two held properties at independent rates", () => {
     const points = projectNetWorth(
       {
         ...BASE_INPUTS,
         startAssets: 0,
         annualIncome: 0,
         monthlySpending: 0,
-        primaryResidenceValue: 100_000,
-        primaryResidenceRate: 0.02,
-        otherPropertyValue: 100_000,
-        otherPropertyRate: 0.05
+        realEstateHoldings: [
+          makeHolding({ value: 100_000, appreciationRate: 0.02 }),
+          makeHolding({ value: 100_000, appreciationRate: 0.05 })
+        ]
       },
       FIXED_NOW
     );
@@ -529,7 +546,7 @@ describe("projectNetWorth", () => {
     }
   });
 
-  it("does not draw down residence or other property during deep shortfall", () => {
+  it("does not draw down real estate holdings during deep shortfall", () => {
     const points = projectNetWorth(
       {
         ...BASE_INPUTS,
@@ -538,10 +555,10 @@ describe("projectNetWorth", () => {
         annualIncome: 0,
         monthlySpending: 2_000,
         nominalReturn: 0,
-        primaryResidenceValue: 300_000,
-        primaryResidenceRate: 0.03,
-        otherPropertyValue: 200_000,
-        otherPropertyRate: 0.02
+        realEstateHoldings: [
+          makeHolding({ value: 300_000, appreciationRate: 0.03 }),
+          makeHolding({ value: 200_000, appreciationRate: 0.02 })
+        ]
       },
       FIXED_NOW
     );
@@ -737,10 +754,10 @@ describe("projectNetWorth", () => {
         cashBalance: 10_000,
         nonLiquidInvestments: 5_000,
         otherFixedAssets: 5_000,
-        primaryResidenceValue: 100_000,
-        primaryResidenceRate: 0.1,
-        otherPropertyValue: 100_000,
-        otherPropertyRate: 0,
+        realEstateHoldings: [
+          makeHolding({ value: 100_000, appreciationRate: 0.1 }),
+          makeHolding({ value: 100_000, appreciationRate: 0 })
+        ],
         startDebt: 50_000,
         annualIncome: 0,
         monthlySpending: 1_000,
@@ -1122,8 +1139,10 @@ describe("projectNetWorth bucket fields", () => {
         cashBalance: 25_000,
         nonLiquidInvestments: 50_000,
         otherFixedAssets: 10_000,
-        primaryResidenceValue: 400_000,
-        otherPropertyValue: 150_000,
+        realEstateHoldings: [
+          makeHolding({ value: 400_000 }),
+          makeHolding({ value: 150_000 })
+        ],
         startDebt: 80_000
       },
       FIXED_NOW
@@ -1142,10 +1161,10 @@ describe("projectNetWorth bucket fields", () => {
         cashBalance: 10_000,
         nonLiquidInvestments: 5_000,
         otherFixedAssets: 5_000,
-        primaryResidenceValue: 100_000,
-        primaryResidenceRate: 0.05,
-        otherPropertyValue: 50_000,
-        otherPropertyRate: 0.02,
+        realEstateHoldings: [
+          makeHolding({ value: 100_000, appreciationRate: 0.05 }),
+          makeHolding({ value: 50_000, appreciationRate: 0.02 })
+        ],
         startDebt: 40_000,
         monthlySpending: 1_500,
         nominalReturn: 0.04
@@ -1157,7 +1176,7 @@ describe("projectNetWorth bucket fields", () => {
     }
   });
 
-  it("compounds real estate independently at its own rates", () => {
+  it("compounds real estate holdings independently at their own rates", () => {
     const points = projectNetWorth(
       {
         ...BASE_INPUTS,
@@ -1165,10 +1184,10 @@ describe("projectNetWorth bucket fields", () => {
         cashBalance: 0,
         annualIncome: 0,
         monthlySpending: 0,
-        primaryResidenceValue: 200_000,
-        primaryResidenceRate: 0.03,
-        otherPropertyValue: 100_000,
-        otherPropertyRate: 0.05
+        realEstateHoldings: [
+          makeHolding({ value: 200_000, appreciationRate: 0.03 }),
+          makeHolding({ value: 100_000, appreciationRate: 0.05 })
+        ]
       },
       FIXED_NOW
     );
@@ -1382,8 +1401,10 @@ describe("projectNetWorth liquid field", () => {
         cashBalance: 10_000,
         nonLiquidInvestments: 999_999,
         otherFixedAssets: 999_999,
-        primaryResidenceValue: 999_999,
-        otherPropertyValue: 999_999,
+        realEstateHoldings: [
+          makeHolding({ value: 999_999 }),
+          makeHolding({ value: 999_999 })
+        ],
         startDebt: 100_000
       },
       FIXED_NOW
@@ -1648,8 +1669,9 @@ describe("real estate investment events", () => {
         cashBalance: 20_000,
         nonLiquidInvestments: 10_000,
         otherFixedAssets: 5_000,
-        primaryResidenceValue: 100_000,
-        primaryResidenceRate: 0.02,
+        realEstateHoldings: [
+          makeHolding({ value: 100_000, appreciationRate: 0.02 })
+        ],
         nominalReturn: 0.05,
         events: [event]
       },

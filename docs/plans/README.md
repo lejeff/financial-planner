@@ -5,7 +5,7 @@ Filenames are prefixed with the date the plan was created.
 
 > For the current roadmap of upcoming work, see [`ROADMAP.md`](../../ROADMAP.md) at the repo root.
 
-**22 plans** across 4 days.
+**23 plans** across 5 days.
 
 ## 2026-04-22
 
@@ -40,3 +40,7 @@ Filenames are prefixed with the date the plan was created.
 ## 2026-04-25
 
 - [Real Estate Investment life event](./2026-04-25-real-estate-investment-event.md) — Add a new "Real Estate Investment" life event modelling a future property purchase (deducted from liquid assets at purchase year) with its own appreciation rate and rental income stream. Introduces a list-based `events: LifeEvent[]` discriminated union on `PlanInputs` so future variants drop in without further schema churn, and brings the architecture doc back in sync with the schema.
+
+## 2026-04-28
+
+- [Real Estate as stackable holdings](./2026-04-28-real-estate-holdings-cards.md) — Replace the two flat Primary Residence / Other Property fields on `PlanInputs` with a single stackable `realEstateHoldings: RealEstateHolding[]` array, mirroring the discriminated-union + add/remove card pattern used by `RealEstateInvestmentEvent` in the Life Events section. Each holding card keeps the existing inputs (value + annual appreciation rate) and stays inside the Real Estate form category; `events` is untouched.

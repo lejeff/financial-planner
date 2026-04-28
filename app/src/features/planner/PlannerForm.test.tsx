@@ -95,13 +95,14 @@ describe("PlannerForm layout", () => {
     expect(within(fs).queryByLabelText("Windfall year")).toBeNull();
   });
 
-  it("renders every Real Estate field and both appreciation sliders inside the category", async () => {
+  it("renders an empty Real Estate category with only the Add button by default", async () => {
     render(<Host />);
     await expand(/real estate/i);
     const realEstate = screen.getByText("Real Estate").closest("fieldset")!;
-    expect(within(realEstate).getByLabelText("Primary Residence value")).toBeInTheDocument();
-    expect(within(realEstate).getByLabelText("Other Property value")).toBeInTheDocument();
-    expect(within(realEstate).getAllByText("Annual appreciation rate")).toHaveLength(2);
+    expect(within(realEstate).queryByTestId("re-holding-card-0")).toBeNull();
+    expect(
+      within(realEstate).getByRole("button", { name: /^\+ add real estate$/i })
+    ).toBeInTheDocument();
   });
 
   it("renders the Projection horizon slider inside the About you fieldset", () => {
@@ -269,10 +270,16 @@ describe("PlannerForm layout", () => {
     expect(btn).toHaveAttribute("aria-expanded", "false");
     await user.click(btn);
     expect(btn).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByLabelText("Primary Residence value")).toBeInTheDocument();
+    // When expanded, the category exposes its Add control even with no
+    // holdings yet — that's the only thing that should be in the DOM here.
+    expect(
+      screen.getByRole("button", { name: /^\+ add real estate$/i })
+    ).toBeInTheDocument();
     await user.click(btn);
     expect(btn).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByLabelText("Primary Residence value")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /^\+ add real estate$/i })
+    ).toBeNull();
   });
 
   it("shows at-a-glance summaries on each collapsed category", () => {
@@ -600,5 +607,115 @@ describe("Real estate investment events", () => {
     expect(
       screen.getByText(/Windfall .{1,3}50K in.+1 real estate investment/i)
     ).toBeInTheDocument();
+  });
+});
+
+describe("Real estate holdings", () => {
+  it("renders no holding cards by default and shows the Add button", async () => {
+    render(<Host />);
+    await expand(/real estate/i);
+    expect(screen.queryByTestId("re-holding-card-0")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /^\+ add real estate$/i })
+    ).toBeInTheDocument();
+  });
+
+  it("adds a card with Value + Annual appreciation rate when the Add button is clicked", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/real estate/i);
+    await user.click(
+      screen.getByRole("button", { name: /^\+ add real estate$/i })
+    );
+    const card = screen.getByTestId("re-holding-card-0");
+    expect(within(card).getByLabelText("Value")).toBeInTheDocument();
+    expect(within(card).getByText("Annual appreciation rate")).toBeInTheDocument();
+  });
+
+  it("stacks multiple holding cards independently", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/real estate/i);
+    // Re-query the Add button before each click: the empty-state and
+    // populated-state branches of the Real Estate category render the
+    // button into different DOM trees, so the first click detaches the
+    // node we'd otherwise have cached.
+    const clickAdd = () =>
+      user.click(
+        screen.getByRole("button", { name: /^\+ add real estate$/i })
+      );
+    await clickAdd();
+    await clickAdd();
+    expect(screen.getByTestId("re-holding-card-0")).toBeInTheDocument();
+    expect(screen.getByTestId("re-holding-card-1")).toBeInTheDocument();
+  });
+
+  it("updates the value of a specific card without affecting siblings", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/real estate/i);
+    const clickAdd = () =>
+      user.click(
+        screen.getByRole("button", { name: /^\+ add real estate$/i })
+      );
+    await clickAdd();
+    await clickAdd();
+
+    const cardA = screen.getByTestId("re-holding-card-0");
+    const cardB = screen.getByTestId("re-holding-card-1");
+    const valueA = within(cardA).getByLabelText("Value") as HTMLInputElement;
+    const valueB = within(cardB).getByLabelText("Value") as HTMLInputElement;
+
+    await user.clear(valueA);
+    await user.type(valueA, "300000");
+    await user.tab();
+
+    expect(valueA.value).toBe("300,000");
+    expect(valueB.value).toBe("0");
+  });
+
+  it("removes a specific card when its remove button is clicked", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/real estate/i);
+    const clickAdd = () =>
+      user.click(
+        screen.getByRole("button", { name: /^\+ add real estate$/i })
+      );
+    await clickAdd();
+    await clickAdd();
+    expect(screen.getByTestId("re-holding-card-1")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /remove real estate holding 1/i })
+    );
+
+    expect(screen.getByTestId("re-holding-card-0")).toBeInTheDocument();
+    expect(screen.queryByTestId("re-holding-card-1")).toBeNull();
+  });
+
+  it("updates the collapsed Real Estate summary as cards are added and valued", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    // Default: empty holdings → em-dash placeholder shown next to the
+    // collapsed Real Estate header.
+    expect(screen.getByText("\u2014")).toBeInTheDocument();
+
+    await expand(/real estate/i);
+    await user.click(
+      screen.getByRole("button", { name: /^\+ add real estate$/i })
+    );
+    const card = screen.getByTestId("re-holding-card-0");
+    const value = within(card).getByLabelText("Value") as HTMLInputElement;
+    await user.clear(value);
+    await user.type(value, "450000");
+    await user.tab();
+
+    // Collapse Real Estate so the summary pill renders again. With cards
+    // present, "real estate" matches the Add and Remove buttons too — pin
+    // the regex to the category header's exact accessible name.
+    await user.click(screen.getByRole("button", { name: /^real estate$/i }));
+    expect(screen.queryByText("\u2014")).toBeNull();
+    expect(screen.getByText(/450K/)).toBeInTheDocument();
   });
 });

@@ -47,6 +47,25 @@ export const LifeEventSchema = z.discriminatedUnion("type", [
 
 export type LifeEvent = z.infer<typeof LifeEventSchema>;
 
+// A property the user owns today: a value (in today's money) and an annual
+// appreciation rate. Compounds in the projection from year 0; no purchase
+// deduction (these are owned now), no rental income wiring (rental flows
+// belong to RealEstateInvestmentEvent). The form lets the user stack 0..N
+// of these as cards; each carries a stable uuid so edits and removals
+// survive re-renders.
+export const RealEstateHoldingSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("realEstateHolding"),
+  value: z.number().finite().nonnegative(),
+  appreciationRate: z
+    .number()
+    .finite()
+    .min(MIN_APPRECIATION)
+    .max(MAX_APPRECIATION)
+});
+
+export type RealEstateHolding = z.infer<typeof RealEstateHoldingSchema>;
+
 export const PlanInputsSchema = z.object({
   name: z.string(),
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "dateOfBirth must be YYYY-MM-DD"),
@@ -72,15 +91,16 @@ export const PlanInputsSchema = z.object({
   cashBalance: z.number().finite().nonnegative(),
   nonLiquidInvestments: z.number().finite().nonnegative(),
   otherFixedAssets: z.number().finite().nonnegative(),
-  primaryResidenceValue: z.number().finite().nonnegative(),
-  otherPropertyValue: z.number().finite().nonnegative(),
-  primaryResidenceRate: z.number().finite().min(MIN_APPRECIATION).max(MAX_APPRECIATION),
-  otherPropertyRate: z.number().finite().min(MIN_APPRECIATION).max(MAX_APPRECIATION),
   // Year at which each non-liquid asset is expected to become liquid; on
   // that year the projection moves the asset's value into the liquid
   // portfolio so it begins compounding at the expected return.
   nonLiquidLiquidityYear: z.number().int(),
   otherFixedLiquidityYear: z.number().int(),
+  // Stackable list of currently-owned real-estate holdings. Each entry
+  // compounds at its own appreciation rate from year 0; the engine sums
+  // them into the `realEstate` bucket alongside any RealEstateInvestmentEvent
+  // values from `events`. Empty array means no held real estate.
+  realEstateHoldings: z.array(RealEstateHoldingSchema),
   // Ordered list of life events. See LifeEventSchema for the union of
   // supported variants. Empty array means no scheduled events.
   events: z.array(LifeEventSchema)
@@ -140,12 +160,9 @@ export const DEFAULT_PLAN_INPUTS: PlanInputs = {
   cashBalance: 0,
   nonLiquidInvestments: 0,
   otherFixedAssets: 0,
-  primaryResidenceValue: 0,
-  otherPropertyValue: 0,
-  primaryResidenceRate: DEFAULT_RATE,
-  otherPropertyRate: DEFAULT_RATE,
   nonLiquidLiquidityYear: new Date().getFullYear(),
   otherFixedLiquidityYear: new Date().getFullYear(),
+  realEstateHoldings: [],
   events: []
 };
 
@@ -163,5 +180,18 @@ export function makeDefaultRealEstateInvestment(): RealEstateInvestmentEvent {
     appreciationRate: 0,
     annualRentalIncome: 0,
     rentalIncomeRate: 0
+  };
+}
+
+// Factory for a fresh real-estate holding with both monetary and rate
+// fields zeroed out so a freshly-added card reads as a blank slate the
+// user fills in deliberately. The id is a uuid so it survives reorders
+// and re-renders, mirroring `makeDefaultRealEstateInvestment`.
+export function makeDefaultRealEstateHolding(): RealEstateHolding {
+  return {
+    id: crypto.randomUUID(),
+    type: "realEstateHolding",
+    value: 0,
+    appreciationRate: 0
   };
 }

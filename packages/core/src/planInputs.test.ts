@@ -3,7 +3,9 @@ import {
   DEFAULT_PLAN_INPUTS,
   LifeEventSchema,
   PlanInputsSchema,
+  RealEstateHoldingSchema,
   RealEstateInvestmentEventSchema,
+  makeDefaultRealEstateHolding,
   makeDefaultRealEstateInvestment
 } from "./planInputs";
 
@@ -83,6 +85,21 @@ describe("PlanInputsSchema", () => {
 
   it("rejects a non-array events field", () => {
     const bad = { ...DEFAULT_PLAN_INPUTS, events: "nope" };
+    expect(() => PlanInputsSchema.parse(bad)).toThrow();
+  });
+
+  it("defaults to an empty realEstateHoldings array", () => {
+    expect(DEFAULT_PLAN_INPUTS.realEstateHoldings).toEqual([]);
+  });
+
+  it("accepts a plan with one real estate holding", () => {
+    const holding = makeDefaultRealEstateHolding();
+    const inputs = { ...DEFAULT_PLAN_INPUTS, realEstateHoldings: [holding] };
+    expect(() => PlanInputsSchema.parse(inputs)).not.toThrow();
+  });
+
+  it("rejects a non-array realEstateHoldings field", () => {
+    const bad = { ...DEFAULT_PLAN_INPUTS, realEstateHoldings: "nope" };
     expect(() => PlanInputsSchema.parse(bad)).toThrow();
   });
 });
@@ -176,5 +193,69 @@ describe("makeDefaultRealEstateInvestment", () => {
     const event = makeDefaultRealEstateInvestment();
     expect(event.appreciationRate).toBe(0);
     expect(event.rentalIncomeRate).toBe(0);
+  });
+});
+
+describe("RealEstateHoldingSchema", () => {
+  const valid = makeDefaultRealEstateHolding();
+
+  it("accepts a freshly-built default holding", () => {
+    expect(() => RealEstateHoldingSchema.parse(valid)).not.toThrow();
+  });
+
+  it("rejects a missing id", () => {
+    const { id: _id, ...rest } = valid;
+    expect(() => RealEstateHoldingSchema.parse(rest)).toThrow();
+  });
+
+  it("rejects an empty id", () => {
+    expect(() =>
+      RealEstateHoldingSchema.parse({ ...valid, id: "" })
+    ).toThrow();
+  });
+
+  it("rejects a wrong type literal", () => {
+    expect(() =>
+      RealEstateHoldingSchema.parse({ ...valid, type: "realEstateInvestment" })
+    ).toThrow();
+  });
+
+  it("rejects a negative value", () => {
+    expect(() =>
+      RealEstateHoldingSchema.parse({ ...valid, value: -1 })
+    ).toThrow();
+  });
+
+  it("rejects a non-finite value", () => {
+    expect(() =>
+      RealEstateHoldingSchema.parse({ ...valid, value: Number.POSITIVE_INFINITY })
+    ).toThrow();
+  });
+
+  it("rejects an appreciationRate outside the global rate bounds", () => {
+    expect(() =>
+      RealEstateHoldingSchema.parse({ ...valid, appreciationRate: 5 })
+    ).toThrow();
+    expect(() =>
+      RealEstateHoldingSchema.parse({ ...valid, appreciationRate: -5 })
+    ).toThrow();
+  });
+});
+
+describe("makeDefaultRealEstateHolding", () => {
+  it("produces a unique id on every call", () => {
+    const a = makeDefaultRealEstateHolding();
+    const b = makeDefaultRealEstateHolding();
+    expect(a.id).not.toBe(b.id);
+  });
+
+  it("defaults value and rate to 0 so a fresh card reads as a blank slate", () => {
+    const holding = makeDefaultRealEstateHolding();
+    expect(holding.value).toBe(0);
+    expect(holding.appreciationRate).toBe(0);
+  });
+
+  it("uses the realEstateHolding type discriminator", () => {
+    expect(makeDefaultRealEstateHolding().type).toBe("realEstateHolding");
   });
 });
