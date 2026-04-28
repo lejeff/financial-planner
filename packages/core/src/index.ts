@@ -11,7 +11,9 @@ export {
   MIN_HORIZON_YEARS,
   MIN_RETIREMENT_AGE,
   PlanInputsSchema,
+  RealEstateHoldingSchema,
   RealEstateInvestmentEventSchema,
+  makeDefaultRealEstateHolding,
   makeDefaultRealEstateInvestment
 } from "./planInputs";
 export type {
@@ -19,6 +21,7 @@ export type {
   LifeEvent,
   PlanInputs,
   ProjectionPoint,
+  RealEstateHolding,
   RealEstateInvestmentEvent
 } from "./planInputs";
 export {

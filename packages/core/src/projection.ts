@@ -1,4 +1,8 @@
-import type { PlanInputs, ProjectionPoint, RealEstateInvestmentEvent } from "./planInputs";
+import type {
+  PlanInputs,
+  ProjectionPoint,
+  RealEstateInvestmentEvent
+} from "./planInputs";
 
 export function ageFromDob(dateOfBirth: string, now: Date = new Date()): number {
   const dob = new Date(dateOfBirth);
@@ -23,13 +27,16 @@ export function clampHorizon(horizonYears: number, min = 10, max = 80): number {
  * since the projection treats already-due loans as settled at year 0.
  */
 export function computeCurrentNetWorth(input: PlanInputs): number {
+  const holdingsTotal = input.realEstateHoldings.reduce(
+    (sum, h) => sum + h.value,
+    0
+  );
   return (
     input.startAssets +
     input.cashBalance +
     input.nonLiquidInvestments +
     input.otherFixedAssets +
-    input.primaryResidenceValue +
-    input.otherPropertyValue -
+    holdingsTotal -
     input.startDebt
   );
 }
@@ -120,12 +127,24 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
 
   let assets = input.startAssets + nonLiquidStartInLiquid + otherFixedStartInLiquid;
   let cash = input.cashBalance;
-  let residence = input.primaryResidenceValue;
-  let otherProp = input.otherPropertyValue;
   let rental = input.rentalIncome;
 
+  // Currently-owned real-estate holdings: each compounds at its own
+  // appreciation rate from year 0. The map keys on holding.id so multiple
+  // holdings stack independently and edits/removals in the form survive
+  // without disturbing the others. No purchase deduction (these are owned
+  // today) and no rental contribution — rental flows belong to the
+  // RealEstateInvestmentEvent variant below.
+  const holdingStates = new Map<string, { value: number; rate: number }>();
+  for (const holding of input.realEstateHoldings) {
+    holdingStates.set(holding.id, {
+      value: holding.value,
+      rate: holding.appreciationRate
+    });
+  }
+
   // Real estate investment events: dormant before their purchase year, then
-  // behave like primaryResidence + rentalIncome (compounding value, rental
+  // behave like a held property + rentalIncome (compounding value, rental
   // flowing into netFlow). Each event carries its own running { value,
   // rental } in nominal currency. The map keys on event.id so multiple
   // events stack independently.
@@ -141,8 +160,9 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
 
   for (let i = 0; i <= years; i += 1) {
     if (i > 0) {
-      residence *= 1 + input.primaryResidenceRate;
-      otherProp *= 1 + input.otherPropertyRate;
+      for (const state of holdingStates.values()) {
+        state.value *= 1 + state.rate;
+      }
       rental *= 1 + input.rentalIncomeRate;
 
       // Salary and recurring expenses are entered in today's money but the
@@ -249,9 +269,13 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
     for (const state of reInvestmentStates.values()) {
       reInvestmentValue += state.value;
     }
+    let holdingsValue = 0;
+    for (const state of holdingStates.values()) {
+      holdingsValue += state.value;
+    }
     const savings = assets + cash;
     const otherAssets = nonLiquid + otherFixed;
-    const realEstate = residence + otherProp + reInvestmentValue;
+    const realEstate = holdingsValue + reInvestmentValue;
     points.push({
       year: startYear + i,
       age: currentAge + i,

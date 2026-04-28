@@ -14,10 +14,12 @@ import {
   MIN_HORIZON_YEARS,
   MIN_RETIREMENT_AGE,
   computeOverTimeAnnualPayment,
+  makeDefaultRealEstateHolding,
   makeDefaultRealEstateInvestment,
   type DebtRepaymentType,
   type LifeEvent,
   type PlanInputs,
+  type RealEstateHolding,
   type RealEstateInvestmentEvent
 } from "@app/core";
 
@@ -32,8 +34,6 @@ type SliderKey =
   | "inflationRate"
   | "horizonYears"
   | "retirementAge"
-  | "primaryResidenceRate"
-  | "otherPropertyRate"
   | "rentalIncomeRate"
   | "debtInterestRate"
   | "debtEndYear"
@@ -42,7 +42,12 @@ type SliderKey =
   | "otherFixedLiquidityYear";
 
 type SliderSpec = {
-  key: SliderKey;
+  // The spec is metadata only — `key` is not used by `SliderRow` itself
+  // (the consumer wires its own `onChange`). Top-level sliders use a
+  // `SliderKey` literal so their wiring stays narrow; card-internal
+  // sliders pass arbitrary identifiers. We accept the wider `string`
+  // here so per-card specs aren't forced to alias a PlanInputs field.
+  key: SliderKey | string;
   label: string;
   min: number;
   max: number;
@@ -79,24 +84,6 @@ const NOMINAL_RETURN_SLIDER: SliderSpec = {
 const RENTAL_INCOME_RATE_SLIDER: SliderSpec = {
   key: "rentalIncomeRate",
   label: "Rental income annual appreciation",
-  min: MIN_APPRECIATION,
-  max: MAX_APPRECIATION,
-  step: 0.001,
-  format: percent
-};
-
-const PRIMARY_RESIDENCE_RATE_SLIDER: SliderSpec = {
-  key: "primaryResidenceRate",
-  label: "Annual appreciation rate",
-  min: MIN_APPRECIATION,
-  max: MAX_APPRECIATION,
-  step: 0.001,
-  format: percent
-};
-
-const OTHER_PROPERTY_RATE_SLIDER: SliderSpec = {
-  key: "otherPropertyRate",
-  label: "Annual appreciation rate",
   min: MIN_APPRECIATION,
   max: MAX_APPRECIATION,
   step: 0.001,
@@ -148,9 +135,7 @@ type AmountKey =
   | "windfallAmount"
   | "cashBalance"
   | "nonLiquidInvestments"
-  | "otherFixedAssets"
-  | "primaryResidenceValue"
-  | "otherPropertyValue";
+  | "otherFixedAssets";
 
 type AmountSpec = {
   key: AmountKey;
@@ -175,11 +160,6 @@ const DEBT_AMOUNTS: AmountSpec[] = [
 
 const INCOME_EXPENSE_AMOUNTS: AmountSpec[] = [
   { key: "annualIncome", label: "Annual Salary", min: 0, max: 10_000_000 }
-];
-
-const REAL_ESTATE_AMOUNTS: AmountSpec[] = [
-  { key: "primaryResidenceValue", label: "Primary Residence value", min: 0, max: 100_000_000 },
-  { key: "otherPropertyValue", label: "Other Property value", min: 0, max: 100_000_000 }
 ];
 
 const ACCENT = {
@@ -220,7 +200,7 @@ function summarizeRealEstate(
   v: PlanInputs,
   formatCompact: (n: number) => string
 ): string {
-  const total = v.primaryResidenceValue + v.otherPropertyValue;
+  const total = v.realEstateHoldings.reduce((sum, h) => sum + h.value, 0);
   return total > 0 ? formatCompact(total) : "—";
 }
 
@@ -272,6 +252,32 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
   const reInvestments = value.events.filter(
     (e): e is RealEstateInvestmentEvent => e.type === "realEstateInvestment"
   );
+
+  const updateHolding = (id: string, patch: Partial<RealEstateHolding>) => {
+    onChange({
+      ...value,
+      realEstateHoldings: value.realEstateHoldings.map((h) =>
+        h.id === id ? { ...h, ...patch } : h
+      )
+    });
+  };
+
+  const removeHolding = (id: string) => {
+    onChange({
+      ...value,
+      realEstateHoldings: value.realEstateHoldings.filter((h) => h.id !== id)
+    });
+  };
+
+  const addRealEstateHolding = () => {
+    onChange({
+      ...value,
+      realEstateHoldings: [
+        ...value.realEstateHoldings,
+        makeDefaultRealEstateHolding()
+      ]
+    });
+  };
 
   // Recomputed per render so the helper text under the year sliders stays
   // in sync if the page sits open across a year boundary. The projection
@@ -508,30 +514,55 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
           icon={<IconHouse />}
           summary={summarizeRealEstate(value, formatCompact)}
         >
-          <CurrencyField
-            label={REAL_ESTATE_AMOUNTS[0].label}
-            value={value[REAL_ESTATE_AMOUNTS[0].key]}
-            onChange={(next) => update(REAL_ESTATE_AMOUNTS[0].key, next)}
-            min={REAL_ESTATE_AMOUNTS[0].min}
-            max={REAL_ESTATE_AMOUNTS[0].max}
-          />
-          <SliderRow
-            spec={PRIMARY_RESIDENCE_RATE_SLIDER}
-            value={value.primaryResidenceRate}
-            onChange={(next) => update("primaryResidenceRate", next)}
-          />
-          <CurrencyField
-            label={REAL_ESTATE_AMOUNTS[1].label}
-            value={value[REAL_ESTATE_AMOUNTS[1].key]}
-            onChange={(next) => update(REAL_ESTATE_AMOUNTS[1].key, next)}
-            min={REAL_ESTATE_AMOUNTS[1].min}
-            max={REAL_ESTATE_AMOUNTS[1].max}
-          />
-          <SliderRow
-            spec={OTHER_PROPERTY_RATE_SLIDER}
-            value={value.otherPropertyRate}
-            onChange={(next) => update("otherPropertyRate", next)}
-          />
+          {value.realEstateHoldings.length === 0 ? (
+            // Empty state: render just the Add button in a fixed-height flex
+            // box so it sits optically centered inside the collapsed pill,
+            // independent of the wrapper's own block padding/margin quirks.
+            <div
+              className="flex items-center justify-center"
+              style={{ minHeight: "48px", marginTop: "-16px", marginBottom: "-12px" }}
+            >
+              <button
+                type="button"
+                onClick={addRealEstateHolding}
+                className="btn-ghost w-full justify-center"
+                style={{
+                  borderColor: ACCENT.realEstate,
+                  color: ACCENT.realEstate,
+                  // Nudge the button up 4px to optically center it; the
+                  // legend's visual weight at the top makes the geometric
+                  // center read slightly low otherwise.
+                  transform: "translateY(-4px)"
+                }}
+              >
+                + Add Real Estate
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {value.realEstateHoldings.map((holding, index) => (
+                <RealEstateHoldingCard
+                  key={holding.id}
+                  holding={holding}
+                  index={index}
+                  accent={ACCENT.realEstate}
+                  onChange={(patch) => updateHolding(holding.id, patch)}
+                  onRemove={() => removeHolding(holding.id)}
+                />
+              ))}
+              <button
+                type="button"
+                onClick={addRealEstateHolding}
+                className="btn-ghost w-full justify-center"
+                style={{
+                  borderColor: ACCENT.realEstate,
+                  color: ACCENT.realEstate
+                }}
+              >
+                + Add Real Estate
+              </button>
+            </div>
+          )}
         </CollapsibleCategory>
 
         <CollapsibleCategory
@@ -867,6 +898,63 @@ function RealEstateInvestmentCard({
           onClick={onRemove}
           className="btn-ghost text-[var(--ink-muted)]"
           aria-label={`Remove real estate investment ${index + 1}`}
+        >
+          Remove
+        </button>
+      </div>
+    </fieldset>
+  );
+}
+
+function RealEstateHoldingCard({
+  holding,
+  index,
+  accent,
+  onChange,
+  onRemove
+}: {
+  holding: RealEstateHolding;
+  index: number;
+  accent: string;
+  onChange: (patch: Partial<RealEstateHolding>) => void;
+  onRemove: () => void;
+}) {
+  const appreciationRateSpec: SliderSpec = {
+    key: "holdingAppreciationRate",
+    label: "Annual appreciation rate",
+    min: MIN_APPRECIATION,
+    max: MAX_APPRECIATION,
+    step: 0.001,
+    format: percent
+  };
+
+  return (
+    <fieldset
+      className="relative space-y-3 rounded-[1rem] border bg-[var(--surface)] px-3 py-3 md:px-4"
+      style={{ borderColor: `color-mix(in oklab, ${accent} 50%, transparent)` }}
+      data-testid={`re-holding-card-${index}`}
+    >
+      <legend className="px-1 text-[12px] font-semibold" style={{ color: accent }}>
+        Real Estate {index + 1}
+      </legend>
+      <CurrencyField
+        label="Value"
+        value={holding.value}
+        onChange={(next) => onChange({ value: next })}
+        min={0}
+        max={100_000_000}
+      />
+      <SliderRow
+        spec={appreciationRateSpec}
+        value={holding.appreciationRate}
+        onChange={(next) => onChange({ appreciationRate: next })}
+      />
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={onRemove}
+          className="btn-ghost text-[var(--ink-muted)]"
+          aria-label={`Remove real estate holding ${index + 1}`}
         >
           Remove
         </button>

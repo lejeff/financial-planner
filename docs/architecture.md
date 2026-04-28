@@ -373,11 +373,24 @@ The only persistent data model today is `PlanInputs`, defined as a Zod schema in
 | `otherFixedAssets` | number | currency | ≥ 0 |
 | `nonLiquidLiquidityYear` | number | year | integer |
 | `otherFixedLiquidityYear` | number | year | integer |
-| `primaryResidenceValue` | number | currency | ≥ 0 |
-| `otherPropertyValue` | number | currency | ≥ 0 |
-| `primaryResidenceRate` | number | fraction | −0.05 … 0.10 |
-| `otherPropertyRate` | number | fraction | −0.05 … 0.10 |
+| `realEstateHoldings` | `RealEstateHolding[]` | — | stackable list of currently-owned properties (see below); default `[]` |
 | `events` | `LifeEvent[]` | — | discriminated union (see below); default `[]` |
+
+#### `RealEstateHolding`
+
+A property the user owns today: a `value` (in today's money) plus an annual
+`appreciationRate`. Each entry compounds independently from year 0; the engine
+sums them into the same `realEstate` bucket as any `RealEstateInvestmentEvent`
+contributions. No purchase deduction (the asset is already owned) and no rental
+flow (rental belongs on `RealEstateInvestmentEvent`). Each carries a stable
+`id` (uuid) so the form can edit/remove a specific entry across renders.
+
+| Field | Type | Units | Constraints |
+| --- | --- | --- | --- |
+| `id` | string | — | non-empty (uuid in practice) |
+| `type` | literal | — | `"realEstateHolding"` |
+| `value` | number | currency | ≥ 0 |
+| `appreciationRate` | number | fraction | −0.05 … 0.10 |
 
 #### `LifeEvent` variants
 
@@ -391,9 +404,9 @@ adding another schema to `LifeEventSchema` in `packages/core/src/planInputs.ts`.
 A future property purchase: at `purchaseYear` the engine deducts
 `purchaseAmount` (in today's money, inflated to the landing year) from the
 liquid portfolio, seeds a per-event property bucket and rental stream, then
-compounds both at the per-event rates each subsequent year. Behaves like
-`primaryResidenceValue` + `rentalIncome` but starts in the future and is
-funded from liquid assets.
+compounds both at the per-event rates each subsequent year. Behaves like a
+held property + `rentalIncome` but starts in the future and is funded from
+liquid assets.
 
 | Field | Type | Units | Constraints |
 | --- | --- | --- | --- |

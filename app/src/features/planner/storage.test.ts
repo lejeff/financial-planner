@@ -90,6 +90,48 @@ describe("loadInputs", () => {
     expect(loaded.events).toEqual([]);
     expect(loaded.startAssets).toBe(250_000);
   });
+
+  it("hydrates a legacy plan (no realEstateHoldings field) with an empty holdings array", () => {
+    // Mirrors the legacy-events case: a payload predating realEstateHoldings
+    // (or saved with the old primaryResidence/otherProperty shape) hydrates
+    // to [] without losing the user's other settings.
+    const legacy = JSON.stringify({
+      ...DEFAULT_PLAN_INPUTS,
+      realEstateHoldings: undefined
+    });
+    stubStorage({ "planner.inputs.v1": legacy });
+
+    expect(loadInputs().realEstateHoldings).toEqual([]);
+  });
+
+  it("preserves a valid stored realEstateHoldings array on load", () => {
+    const validHolding = {
+      id: "h1",
+      type: "realEstateHolding",
+      value: 450_000,
+      appreciationRate: 0.025
+    };
+    const stored = JSON.stringify({
+      ...DEFAULT_PLAN_INPUTS,
+      realEstateHoldings: [validHolding]
+    });
+    stubStorage({ "planner.inputs.v1": stored });
+
+    expect(loadInputs().realEstateHoldings).toEqual([validHolding]);
+  });
+
+  it("falls back to [] when stored realEstateHoldings is malformed (keeps other fields)", () => {
+    const stored = JSON.stringify({
+      ...DEFAULT_PLAN_INPUTS,
+      startAssets: 250_000,
+      realEstateHoldings: [{ id: "x", type: "unknown", garbage: true }]
+    });
+    stubStorage({ "planner.inputs.v1": stored });
+
+    const loaded = loadInputs();
+    expect(loaded.realEstateHoldings).toEqual([]);
+    expect(loaded.startAssets).toBe(250_000);
+  });
 });
 
 describe("saveInputs and clearInputs", () => {
