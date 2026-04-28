@@ -78,6 +78,44 @@ describe("loadInputs", () => {
     expect(loadInputs().events).toEqual([validEvent]);
   });
 
+  it("preserves a valid stored windfall event on load", () => {
+    // Round-trip the second LifeEvent variant through the same defensive
+    // EventsSchema parse the storage layer applies on load.
+    const windfall = {
+      id: "wf-1",
+      type: "windfall",
+      amount: 50_000,
+      year: 2031
+    };
+    const stored = JSON.stringify({
+      ...DEFAULT_PLAN_INPUTS,
+      events: [windfall]
+    });
+    stubStorage({ "planner.inputs.v1": stored });
+
+    expect(loadInputs().events).toEqual([windfall]);
+  });
+
+  it("preserves a mix of windfall and realEstateInvestment events on load", () => {
+    const windfall = { id: "wf-1", type: "windfall", amount: 25_000, year: 2030 };
+    const reInvestment = {
+      id: "re-1",
+      type: "realEstateInvestment",
+      purchaseAmount: 200_000,
+      purchaseYear: 2032,
+      appreciationRate: 0.02,
+      annualRentalIncome: 6_000,
+      rentalIncomeRate: 0.01
+    };
+    const stored = JSON.stringify({
+      ...DEFAULT_PLAN_INPUTS,
+      events: [windfall, reInvestment]
+    });
+    stubStorage({ "planner.inputs.v1": stored });
+
+    expect(loadInputs().events).toEqual([windfall, reInvestment]);
+  });
+
   it("falls back to [] when stored events array is malformed (keeps other fields)", () => {
     const stored = JSON.stringify({
       ...DEFAULT_PLAN_INPUTS,

@@ -363,8 +363,6 @@ The only persistent data model today is `PlanInputs`, defined as a Zod schema in
 | `retirementAge` | number | years | 18 … 100, integer |
 | `rentalIncome` | number | currency | ≥ 0 |
 | `rentalIncomeRate` | number | fraction | −0.05 … 0.10 |
-| `windfallAmount` | number | currency | ≥ 0 |
-| `windfallYear` | number | year | integer |
 | `nominalReturn` | number | fraction | −0.5 … 0.5 |
 | `inflationRate` | number | fraction | −0.05 … 0.15 |
 | `horizonYears` | number | years | 10 … 80 |
@@ -396,7 +394,7 @@ flow (rental belongs on `RealEstateInvestmentEvent`). Each carries a stable
 
 A discriminated union keyed by `type`, persisted as part of `PlanInputs`. Each
 variant carries a stable `id` (uuid) so the form can edit/remove a specific
-entry across renders. Today there is one variant; new variants drop in by
+entry across renders. There are two variants today; new variants drop in by
 adding another schema to `LifeEventSchema` in `packages/core/src/planInputs.ts`.
 
 ##### `RealEstateInvestmentEvent` (`type: "realEstateInvestment"`)
@@ -417,6 +415,21 @@ liquid assets.
 | `appreciationRate` | number | fraction | −0.05 … 0.10 |
 | `annualRentalIncome` | number | currency (today's money) | ≥ 0 |
 | `rentalIncomeRate` | number | fraction | −0.05 … 0.10 |
+
+##### `WindfallEvent` (`type: "windfall"`)
+
+A one-off cash deposit landing in the liquid portfolio at year-end of `year`.
+The amount is entered in today's money and the engine inflates it to the
+landing year (same convention as `RealEstateInvestmentEvent.purchaseAmount`).
+Multiple windfall events stack independently; each fires once when its `year`
+matches the projection's calendar year.
+
+| Field | Type | Units | Constraints |
+| --- | --- | --- | --- |
+| `id` | string | — | non-empty (uuid in practice) |
+| `type` | literal | — | `"windfall"` |
+| `amount` | number | currency (today's money) | ≥ 0 |
+| `year` | number | year | integer |
 
 Derived output: `ProjectionPoint[]` with `{ year, age, netWorth, liquid, savings, otherAssets, realEstate, debt }`.
 

@@ -79,20 +79,32 @@ describe("PlannerForm layout", () => {
     expect(within(fs).getByLabelText("Recurring monthly expenses")).toBeInTheDocument();
   });
 
-  it("renders the Life Events fieldset with Windfall amount and year", async () => {
+  it("renders an empty Life Events category with both Add buttons by default", async () => {
     render(<Host />);
     await expand(/life events/i);
     const fs = screen.getByText("Life Events").closest("fieldset")!;
-    expect(within(fs).getByLabelText("Windfall amount")).toBeInTheDocument();
-    expect(within(fs).getByLabelText("Windfall year")).toBeInTheDocument();
+    // No windfall card or windfall fields rendered before any are added.
+    expect(within(fs).queryByTestId("windfall-card-0")).toBeNull();
+    expect(within(fs).queryByLabelText("Amount")).toBeNull();
+    expect(
+      within(fs).getByRole("button", { name: /^\+ add windfall$/i })
+    ).toBeInTheDocument();
+    expect(
+      within(fs).getByRole("button", {
+        name: /^\+ add real estate investment$/i
+      })
+    ).toBeInTheDocument();
   });
 
-  it("does not render Windfall fields inside Income & Expenses", async () => {
+  it("does not render windfall fields anywhere by default", async () => {
     render(<Host />);
+    // Across the whole form, no windfall card and no card-internal Amount field
+    // exist before the user clicks Add Windfall.
+    expect(screen.queryByTestId("windfall-card-0")).toBeNull();
+    // Open Income & Expenses and Life Events to confirm explicitly.
     await expand(/income & expenses/i);
-    const fs = screen.getByText("Income & Expenses").closest("fieldset")!;
-    expect(within(fs).queryByLabelText("Windfall amount")).toBeNull();
-    expect(within(fs).queryByLabelText("Windfall year")).toBeNull();
+    await expand(/life events/i);
+    expect(screen.queryByLabelText(/^Amount$/)).toBeNull();
   });
 
   it("renders an empty Real Estate category with only the Add button by default", async () => {
@@ -147,12 +159,15 @@ describe("PlannerForm layout", () => {
     expect(field.value).toBe("75,000");
   });
 
-  it("moves the Windfall year slider", async () => {
+  it("moves a windfall card's year slider", async () => {
+    const user = userEvent.setup();
     render(<Host />);
     await expand(/life events/i);
-    const field = screen.getByLabelText("Windfall year") as HTMLInputElement;
-    fireEvent.change(field, { target: { value: "2045" } });
-    expect(field.value).toBe("2045");
+    await user.click(screen.getByRole("button", { name: /^\+ add windfall$/i }));
+    const card = screen.getByTestId("windfall-card-0");
+    const slider = within(card).getByLabelText("Year") as HTMLInputElement;
+    fireEvent.change(slider, { target: { value: "2045" } });
+    expect(slider.value).toBe("2045");
   });
 
   it("invokes onReset when the reset button is clicked", async () => {
@@ -314,7 +329,9 @@ describe("PlannerForm layout", () => {
     expect(screen.getByText("None scheduled")).toBeInTheDocument();
 
     await expand(/life events/i);
-    const amount = screen.getByLabelText("Windfall amount") as HTMLInputElement;
+    await user.click(screen.getByRole("button", { name: /^\+ add windfall$/i }));
+    const card = screen.getByTestId("windfall-card-0");
+    const amount = within(card).getByLabelText("Amount") as HTMLInputElement;
     await user.clear(amount);
     await user.type(amount, "50000");
     await user.tab();
@@ -394,16 +411,18 @@ describe("PlannerForm layout", () => {
     expect(within(debt).getByText("in 5 years")).toBeInTheDocument();
   });
 
-  it("renders the Windfall year as a slider with an 'in 5 years' helper at the default", async () => {
+  it("renders a freshly-added windfall card's Year slider with an 'in 5 years' helper at the default", async () => {
+    const user = userEvent.setup();
     render(<Host />);
     await expand(/life events/i);
-    const fs = screen.getByText("Life Events").closest("fieldset")!;
-    const slider = within(fs).getByLabelText("Windfall year") as HTMLInputElement;
+    await user.click(screen.getByRole("button", { name: /^\+ add windfall$/i }));
+    const card = screen.getByTestId("windfall-card-0");
+    const slider = within(card).getByLabelText("Year") as HTMLInputElement;
     expect(slider.type).toBe("range");
     const currentYear = new Date().getFullYear();
     expect(slider.value).toBe(String(currentYear + 5));
-    expect(within(fs).getByText(String(currentYear + 5))).toBeInTheDocument();
-    expect(within(fs).getByText("in 5 years")).toBeInTheDocument();
+    expect(within(card).getByText(String(currentYear + 5))).toBeInTheDocument();
+    expect(within(card).getByText("in 5 years")).toBeInTheDocument();
   });
 });
 
@@ -595,7 +614,9 @@ describe("Real estate investment events", () => {
     render(<Host />);
     await expand(/life events/i);
 
-    const amount = screen.getByLabelText("Windfall amount") as HTMLInputElement;
+    await user.click(screen.getByRole("button", { name: /^\+ add windfall$/i }));
+    const wfCard = screen.getByTestId("windfall-card-0");
+    const amount = within(wfCard).getByLabelText("Amount") as HTMLInputElement;
     await user.clear(amount);
     await user.type(amount, "50000");
     await user.tab();
@@ -607,6 +628,156 @@ describe("Real estate investment events", () => {
     expect(
       screen.getByText(/Windfall .{1,3}50K in.+1 real estate investment/i)
     ).toBeInTheDocument();
+  });
+});
+
+describe("Windfall events", () => {
+  it("renders no windfall cards by default", async () => {
+    render(<Host />);
+    await expand(/life events/i);
+    expect(screen.queryByTestId("windfall-card-0")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /^\+ add windfall$/i })
+    ).toBeInTheDocument();
+  });
+
+  it("adds a card with Amount + Year fields when the Add button is clicked", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    await user.click(screen.getByRole("button", { name: /^\+ add windfall$/i }));
+    const card = screen.getByTestId("windfall-card-0");
+    expect(within(card).getByLabelText("Amount")).toBeInTheDocument();
+    expect(within(card).getByLabelText("Year")).toBeInTheDocument();
+    // Default amount is 0 and the year is currentYear + 5.
+    const amount = within(card).getByLabelText("Amount") as HTMLInputElement;
+    const year = within(card).getByLabelText("Year") as HTMLInputElement;
+    expect(amount.value).toBe("0");
+    expect(year.value).toBe(String(new Date().getFullYear() + 5));
+  });
+
+  it("stacks multiple windfall cards independently", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    const addBtn = screen.getByRole("button", { name: /^\+ add windfall$/i });
+    await user.click(addBtn);
+    await user.click(addBtn);
+    expect(screen.getByTestId("windfall-card-0")).toBeInTheDocument();
+    expect(screen.getByTestId("windfall-card-1")).toBeInTheDocument();
+  });
+
+  it("updates the amount of a specific card without affecting siblings", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    const addBtn = screen.getByRole("button", { name: /^\+ add windfall$/i });
+    await user.click(addBtn);
+    await user.click(addBtn);
+
+    const cardA = screen.getByTestId("windfall-card-0");
+    const cardB = screen.getByTestId("windfall-card-1");
+    const amountA = within(cardA).getByLabelText("Amount") as HTMLInputElement;
+    const amountB = within(cardB).getByLabelText("Amount") as HTMLInputElement;
+
+    await user.clear(amountA);
+    await user.type(amountA, "75000");
+    await user.tab();
+
+    expect(amountA.value).toBe("75,000");
+    expect(amountB.value).toBe("0");
+  });
+
+  it("removes a specific card when its remove button is clicked", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    const addBtn = screen.getByRole("button", { name: /^\+ add windfall$/i });
+    await user.click(addBtn);
+    await user.click(addBtn);
+    expect(screen.getByTestId("windfall-card-1")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /remove windfall 1/i })
+    );
+
+    // After removal of the first card, the remaining one re-indexes to 0.
+    expect(screen.getByTestId("windfall-card-0")).toBeInTheDocument();
+    expect(screen.queryByTestId("windfall-card-1")).toBeNull();
+  });
+
+  it("collapses to a count when more than one windfall is added", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    const addBtn = screen.getByRole("button", { name: /^\+ add windfall$/i });
+    await user.click(addBtn);
+    await user.click(addBtn);
+    // Collapse Life Events so the summary line renders in the header.
+    await user.click(screen.getByRole("button", { name: /life events/i }));
+    expect(screen.getByText(/2 windfalls/)).toBeInTheDocument();
+  });
+
+  it("shows the inflation-adjusted future value next to the relative year in the helper text", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    await user.click(screen.getByRole("button", { name: /^\+ add windfall$/i }));
+
+    const card = screen.getByTestId("windfall-card-0");
+    const amount = within(card).getByLabelText("Amount") as HTMLInputElement;
+    await user.clear(amount);
+    await user.type(amount, "10000");
+    await user.tab();
+
+    const yearsToLanding = 5;
+    const yearSlider = within(card).getByLabelText("Year") as HTMLInputElement;
+    fireEvent.change(yearSlider, {
+      target: { value: String(new Date().getFullYear() + yearsToLanding) }
+    });
+
+    // Helper must surface the *nominal* (inflation-adjusted) deposit the
+    // engine actually credits at landing year, not the today's-money input.
+    // We don't hard-code the currency symbol (it depends on the locale set
+    // by CurrencyProvider); just match the inflated thousands + relative
+    // phrase. format() rounds to whole units for amounts >= 1000.
+    const inflated = Math.round(
+      10_000 * (1 + DEFAULT_PLAN_INPUTS.inflationRate) ** yearsToLanding
+    );
+    const formatted = inflated.toLocaleString("en-US");
+    expect(formatted).not.toBe("10,000"); // sanity-check: non-zero inflation default
+    expect(
+      within(card).getByText(new RegExp(`${formatted} in ${yearsToLanding} years`))
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to just the relative year when no windfall amount has been entered yet", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    await user.click(screen.getByRole("button", { name: /^\+ add windfall$/i }));
+    const card = screen.getByTestId("windfall-card-0");
+    // Default year = current year + 5, so the helper reads "in 5 years".
+    expect(within(card).getByText("in 5 years")).toBeInTheDocument();
+    // No formatted amount appears anywhere in the card while amount is 0.
+    expect(within(card).queryByText(/[0-9],[0-9]/)).toBeNull();
+  });
+
+  it("renders windfalls before real estate investments inside Life Events", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    await user.click(screen.getByRole("button", { name: /^\+ add windfall$/i }));
+    await user.click(
+      screen.getByRole("button", { name: /add real estate investment/i })
+    );
+    const wfCard = screen.getByTestId("windfall-card-0");
+    const reCard = screen.getByTestId("re-investment-card-0");
+    // Windfall card precedes RE investment card in document order.
+    expect(
+      wfCard.compareDocumentPosition(reCard) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 });
 
