@@ -1,7 +1,8 @@
 import type {
   PlanInputs,
   ProjectionPoint,
-  RealEstateInvestmentEvent
+  RealEstateInvestmentEvent,
+  WindfallEvent
 } from "./planInputs";
 
 export function ageFromDob(dateOfBirth: string, now: Date = new Date()): number {
@@ -156,6 +157,13 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
     reInvestmentStates.set(event.id, { value: 0, rental: 0 });
   }
 
+  // Windfall events: each is a one-shot deposit landing in the liquid
+  // portfolio at year-end of `event.year`. No per-year carry, so no state
+  // map is needed — we just iterate the list inside the loop.
+  const windfallEvents: WindfallEvent[] = input.events.filter(
+    (e): e is WindfallEvent => e.type === "windfall"
+  );
+
   const points: ProjectionPoint[] = [];
 
   for (let i = 0; i <= years; i += 1) {
@@ -235,11 +243,15 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
         assets = afterReturn - (shortfall - fromCash);
       }
 
-      // One-off windfall lands in the investment portfolio at year-end of the
-      // matching calendar year, so it starts compounding from the following year.
-      // The amount is entered in today's money, so inflate it to the landing year.
-      if (startYear + i === input.windfallYear && input.windfallAmount > 0) {
-        assets += input.windfallAmount * inflator;
+      // Windfall events: each one lands in the investment portfolio at
+      // year-end of the matching calendar year, so it starts compounding
+      // from the following year. Amounts are entered in today's money, so
+      // inflate to the landing year (same convention as the RE investment
+      // purchase deduction below).
+      for (const event of windfallEvents) {
+        if (startYear + i === event.year && event.amount > 0) {
+          assets += event.amount * inflator;
+        }
       }
 
       // Non-liquid assets become liquid at their configured year. Transfer

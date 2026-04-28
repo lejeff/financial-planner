@@ -16,11 +16,13 @@ import {
   computeOverTimeAnnualPayment,
   makeDefaultRealEstateHolding,
   makeDefaultRealEstateInvestment,
+  makeDefaultWindfallEvent,
   type DebtRepaymentType,
   type LifeEvent,
   type PlanInputs,
   type RealEstateHolding,
-  type RealEstateInvestmentEvent
+  type RealEstateInvestmentEvent,
+  type WindfallEvent
 } from "@app/core";
 
 type Props = {
@@ -37,7 +39,6 @@ type SliderKey =
   | "rentalIncomeRate"
   | "debtInterestRate"
   | "debtEndYear"
-  | "windfallYear"
   | "nonLiquidLiquidityYear"
   | "otherFixedLiquidityYear";
 
@@ -132,7 +133,6 @@ type AmountKey =
   | "monthlySpending"
   | "annualIncome"
   | "rentalIncome"
-  | "windfallAmount"
   | "cashBalance"
   | "nonLiquidInvestments"
   | "otherFixedAssets";
@@ -208,10 +208,24 @@ function summarizeLifeEvents(
   v: PlanInputs,
   formatCompact: (n: number) => string
 ): string {
+  const windfalls = v.events.filter(
+    (e): e is WindfallEvent => e.type === "windfall"
+  );
   const reCount = v.events.filter((e) => e.type === "realEstateInvestment").length;
   const parts: string[] = [];
-  if (v.windfallAmount > 0) {
-    parts.push(`Windfall ${formatCompact(v.windfallAmount)} in ${v.windfallYear}`);
+  // When there's exactly one windfall, surface its amount + year inline
+  // (preserves the "Windfall $50K in 2031" line the form had before it
+  // became list-based). Multiple windfalls collapse to a count to keep the
+  // collapsed-pill summary single-line.
+  if (windfalls.length === 1) {
+    const wf = windfalls[0]!;
+    if (wf.amount > 0) {
+      parts.push(`Windfall ${formatCompact(wf.amount)} in ${wf.year}`);
+    } else {
+      parts.push("1 windfall");
+    }
+  } else if (windfalls.length > 1) {
+    parts.push(`${windfalls.length} windfalls`);
   }
   if (reCount > 0) {
     parts.push(`${reCount} real estate investment${reCount === 1 ? "" : "s"}`);
@@ -249,8 +263,19 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
     });
   };
 
+  const addWindfallEvent = () => {
+    onChange({
+      ...value,
+      events: [...value.events, makeDefaultWindfallEvent()]
+    });
+  };
+
   const reInvestments = value.events.filter(
     (e): e is RealEstateInvestmentEvent => e.type === "realEstateInvestment"
+  );
+
+  const windfalls = value.events.filter(
+    (e): e is WindfallEvent => e.type === "windfall"
   );
 
   const updateHolding = (id: string, patch: Partial<RealEstateHolding>) => {
@@ -314,15 +339,6 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
   const DEBT_END_YEAR_SLIDER: SliderSpec = {
     key: "debtEndYear",
     label: debtEndYearLabel,
-    min: yearSliderMin,
-    max: yearSliderMax,
-    step: 1,
-    format: rawYear
-  };
-
-  const WINDFALL_YEAR_SLIDER: SliderSpec = {
-    key: "windfallYear",
-    label: "Windfall year",
     min: yearSliderMin,
     max: yearSliderMax,
     step: 1,
@@ -571,19 +587,30 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
           icon={<IconSparkle />}
           summary={summarizeLifeEvents(value, formatCompact)}
         >
-          <CurrencyField
-            label="Windfall amount"
-            value={value.windfallAmount}
-            onChange={(next) => update("windfallAmount", next)}
-            min={0}
-            max={100_000_000}
-          />
-          <SliderRow
-            spec={WINDFALL_YEAR_SLIDER}
-            value={value.windfallYear}
-            onChange={(next) => update("windfallYear", next)}
-            helper={yearsFromNow(value.windfallYear, currentYear)}
-          />
+          <div className="space-y-3">
+            {windfalls.map((event, index) => (
+              <WindfallEventCard
+                key={event.id}
+                event={event}
+                index={index}
+                accent={ACCENT.lifeEvents}
+                yearMin={yearSliderMin}
+                yearMax={yearSliderMax}
+                currentYear={currentYear}
+                inflationRate={value.inflationRate}
+                onChange={(patch) => updateEvent(event.id, patch)}
+                onRemove={() => removeEvent(event.id)}
+              />
+            ))}
+            <button
+              type="button"
+              onClick={addWindfallEvent}
+              className="btn-ghost w-full justify-center"
+              style={{ borderColor: ACCENT.lifeEvents, color: ACCENT.lifeEvents }}
+            >
+              + Add Windfall
+            </button>
+          </div>
 
           <div className="space-y-3 pt-2">
             {reInvestments.map((event, index) => (
@@ -819,7 +846,7 @@ function RealEstateInvestmentCard({
   const inflatedPurchaseAmount =
     event.purchaseAmount * (1 + inflationRate) ** yearsToPurchase;
   const purchaseYearSpec: SliderSpec = {
-    key: "windfallYear",
+    key: "reInvestmentPurchaseYear",
     label: "Purchase year",
     min: yearMin,
     max: yearMax,
@@ -898,6 +925,86 @@ function RealEstateInvestmentCard({
           onClick={onRemove}
           className="btn-ghost text-[var(--ink-muted)]"
           aria-label={`Remove real estate investment ${index + 1}`}
+        >
+          Remove
+        </button>
+      </div>
+    </fieldset>
+  );
+}
+
+function WindfallEventCard({
+  event,
+  index,
+  accent,
+  yearMin,
+  yearMax,
+  currentYear,
+  inflationRate,
+  onChange,
+  onRemove
+}: {
+  event: WindfallEvent;
+  index: number;
+  accent: string;
+  yearMin: number;
+  yearMax: number;
+  currentYear: number;
+  inflationRate: number;
+  onChange: (patch: Partial<WindfallEvent>) => void;
+  onRemove: () => void;
+}) {
+  const { format } = useCurrency();
+  // Match the projection engine: today's-money inputs are inflated to the
+  // landing year. Clamp the exponent at 0 so a past year still shows the
+  // user's entered amount instead of a deflated one.
+  const yearsToLanding = Math.max(0, event.year - currentYear);
+  const inflatedAmount = event.amount * (1 + inflationRate) ** yearsToLanding;
+  const yearSpec: SliderSpec = {
+    key: "windfallEventYear",
+    label: "Year",
+    min: yearMin,
+    max: yearMax,
+    step: 1,
+    format: rawYear
+  };
+
+  return (
+    <fieldset
+      className="relative space-y-3 rounded-[1rem] border bg-[var(--surface)] px-3 py-3 md:px-4"
+      style={{ borderColor: `color-mix(in oklab, ${accent} 50%, transparent)` }}
+      data-testid={`windfall-card-${index}`}
+    >
+      <legend className="px-1 text-[12px] font-semibold" style={{ color: accent }}>
+        Windfall {index + 1}
+      </legend>
+      <CurrencyField
+        label="Amount"
+        value={event.amount}
+        onChange={(next) => onChange({ amount: next })}
+        min={0}
+        max={100_000_000}
+      />
+      <SliderRow
+        spec={yearSpec}
+        value={event.year}
+        onChange={(next) => onChange({ year: next })}
+        helper={
+          // Surface the inflation-adjusted nominal deposit (what the engine
+          // actually adds to the portfolio in that year) next to the
+          // relative timing, e.g. "€11,314 in 5 years". On a fresh
+          // blank-slate card we drop back to just the relative phrase.
+          event.amount > 0
+            ? `${format(inflatedAmount)} ${yearsFromNow(event.year, currentYear)}`
+            : yearsFromNow(event.year, currentYear)
+        }
+      />
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={onRemove}
+          className="btn-ghost text-[var(--ink-muted)]"
+          aria-label={`Remove windfall ${index + 1}`}
         >
           Remove
         </button>

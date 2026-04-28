@@ -13,8 +13,10 @@ export {
   PlanInputsSchema,
   RealEstateHoldingSchema,
   RealEstateInvestmentEventSchema,
+  WindfallEventSchema,
   makeDefaultRealEstateHolding,
-  makeDefaultRealEstateInvestment
+  makeDefaultRealEstateInvestment,
+  makeDefaultWindfallEvent
 } from "./planInputs";
 export type {
   DebtRepaymentType,
@@ -22,7 +24,8 @@ export type {
   PlanInputs,
   ProjectionPoint,
   RealEstateHolding,
-  RealEstateInvestmentEvent
+  RealEstateInvestmentEvent,
+  WindfallEvent
 } from "./planInputs";
 export {
   ageFromDob,

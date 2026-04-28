@@ -41,8 +41,22 @@ export type RealEstateInvestmentEvent = z.infer<
   typeof RealEstateInvestmentEventSchema
 >;
 
+// One-off cash deposit landing in the liquid portfolio at year-end of a
+// chosen calendar year. The amount is entered in today's money and the
+// engine inflates it to the landing year, mirroring the convention used by
+// RealEstateInvestmentEvent's purchase amount.
+export const WindfallEventSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("windfall"),
+  amount: z.number().finite().nonnegative(),
+  year: z.number().int()
+});
+
+export type WindfallEvent = z.infer<typeof WindfallEventSchema>;
+
 export const LifeEventSchema = z.discriminatedUnion("type", [
-  RealEstateInvestmentEventSchema
+  RealEstateInvestmentEventSchema,
+  WindfallEventSchema
 ]);
 
 export type LifeEvent = z.infer<typeof LifeEventSchema>;
@@ -83,8 +97,6 @@ export const PlanInputsSchema = z.object({
   retirementAge: z.number().int().min(MIN_RETIREMENT_AGE).max(MAX_RETIREMENT_AGE),
   rentalIncome: z.number().finite().nonnegative(),
   rentalIncomeRate: z.number().finite().min(MIN_APPRECIATION).max(MAX_APPRECIATION),
-  windfallAmount: z.number().finite().nonnegative(),
-  windfallYear: z.number().int(),
   nominalReturn: z.number().finite().min(-0.5).max(0.5),
   inflationRate: z.number().finite().min(-0.05).max(0.15),
   horizonYears: z.number().int().min(MIN_HORIZON_YEARS).max(MAX_HORIZON_YEARS),
@@ -121,11 +133,12 @@ export type ProjectionPoint = {
 
 // Computed at module load: a fresh planner session starts with the user 40
 // years old today (a sensible neutral midpoint) and every monetary/rate field
-// at 0 so the form reads as a blank slate. Loan end year and windfall year
-// default to currentYear + 5 (a reasonable mid-term target users can adjust
-// via the slider); liquidity-year fields stay at the current year (the
-// "already liquid" baseline). retirementAge stays at 65 and horizonYears
-// stays at 30 (the schema enforces a minimum of 10).
+// at 0 so the form reads as a blank slate. The loan end year defaults to
+// currentYear + 5 (a reasonable mid-term target users can adjust via the
+// slider); liquidity-year fields stay at the current year (the "already
+// liquid" baseline). retirementAge stays at 65 and horizonYears stays at 30
+// (the schema enforces a minimum of 10). Windfalls and other life events
+// default to empty arrays so the Life Events section reads as a blank slate.
 function defaultDateOfBirth(): string {
   const now = new Date();
   const y = now.getFullYear() - 40;
@@ -152,8 +165,6 @@ export const DEFAULT_PLAN_INPUTS: PlanInputs = {
   retirementAge: 65,
   rentalIncome: 0,
   rentalIncomeRate: DEFAULT_RATE,
-  windfallAmount: 0,
-  windfallYear: new Date().getFullYear() + 5,
   nominalReturn: 0.05,
   inflationRate: DEFAULT_RATE,
   horizonYears: 30,
@@ -193,5 +204,18 @@ export function makeDefaultRealEstateHolding(): RealEstateHolding {
     type: "realEstateHolding",
     value: 0,
     appreciationRate: 0
+  };
+}
+
+// Factory for a fresh windfall event with a zero amount and a year five
+// years from now (matches the historical default of the old single-windfall
+// scalar so the slider lands in a familiar mid-term spot). The id is a uuid
+// so it survives reorders and re-renders.
+export function makeDefaultWindfallEvent(): WindfallEvent {
+  return {
+    id: crypto.randomUUID(),
+    type: "windfall",
+    amount: 0,
+    year: new Date().getFullYear() + 5
   };
 }

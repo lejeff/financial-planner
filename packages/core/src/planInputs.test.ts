@@ -5,8 +5,10 @@ import {
   PlanInputsSchema,
   RealEstateHoldingSchema,
   RealEstateInvestmentEventSchema,
+  WindfallEventSchema,
   makeDefaultRealEstateHolding,
-  makeDefaultRealEstateInvestment
+  makeDefaultRealEstateInvestment,
+  makeDefaultWindfallEvent
 } from "./planInputs";
 
 describe("PlanInputsSchema", () => {
@@ -83,6 +85,20 @@ describe("PlanInputsSchema", () => {
     expect(() => PlanInputsSchema.parse(inputs)).not.toThrow();
   });
 
+  it("accepts a plan with one windfall event", () => {
+    const event = makeDefaultWindfallEvent();
+    const inputs = { ...DEFAULT_PLAN_INPUTS, events: [event] };
+    expect(() => PlanInputsSchema.parse(inputs)).not.toThrow();
+  });
+
+  it("accepts a plan mixing windfall and real estate investment events", () => {
+    const inputs = {
+      ...DEFAULT_PLAN_INPUTS,
+      events: [makeDefaultWindfallEvent(), makeDefaultRealEstateInvestment()]
+    };
+    expect(() => PlanInputsSchema.parse(inputs)).not.toThrow();
+  });
+
   it("rejects a non-array events field", () => {
     const bad = { ...DEFAULT_PLAN_INPUTS, events: "nope" };
     expect(() => PlanInputsSchema.parse(bad)).toThrow();
@@ -124,7 +140,7 @@ describe("RealEstateInvestmentEventSchema", () => {
 
   it("rejects a wrong type literal", () => {
     expect(() =>
-      RealEstateInvestmentEventSchema.parse({ ...valid, type: "windfall" })
+      RealEstateInvestmentEventSchema.parse({ ...valid, type: "lottery" })
     ).toThrow();
   });
 
@@ -160,10 +176,16 @@ describe("RealEstateInvestmentEventSchema", () => {
 });
 
 describe("LifeEventSchema", () => {
-  it("discriminates by type", () => {
+  it("discriminates a real estate investment by type", () => {
     const re = makeDefaultRealEstateInvestment();
     const parsed = LifeEventSchema.parse(re);
     expect(parsed.type).toBe("realEstateInvestment");
+  });
+
+  it("discriminates a windfall by type", () => {
+    const wf = makeDefaultWindfallEvent();
+    const parsed = LifeEventSchema.parse(wf);
+    expect(parsed.type).toBe("windfall");
   });
 
   it("rejects an unknown type variant", () => {
@@ -257,5 +279,65 @@ describe("makeDefaultRealEstateHolding", () => {
 
   it("uses the realEstateHolding type discriminator", () => {
     expect(makeDefaultRealEstateHolding().type).toBe("realEstateHolding");
+  });
+});
+
+describe("WindfallEventSchema", () => {
+  const valid = makeDefaultWindfallEvent();
+
+  it("accepts a freshly-built default event", () => {
+    expect(() => WindfallEventSchema.parse(valid)).not.toThrow();
+  });
+
+  it("rejects a missing id", () => {
+    const { id: _id, ...rest } = valid;
+    expect(() => WindfallEventSchema.parse(rest)).toThrow();
+  });
+
+  it("rejects an empty id", () => {
+    expect(() => WindfallEventSchema.parse({ ...valid, id: "" })).toThrow();
+  });
+
+  it("rejects a wrong type literal", () => {
+    expect(() =>
+      WindfallEventSchema.parse({ ...valid, type: "realEstateInvestment" })
+    ).toThrow();
+  });
+
+  it("rejects a negative amount", () => {
+    expect(() => WindfallEventSchema.parse({ ...valid, amount: -1 })).toThrow();
+  });
+
+  it("rejects a non-finite amount", () => {
+    expect(() =>
+      WindfallEventSchema.parse({ ...valid, amount: Number.POSITIVE_INFINITY })
+    ).toThrow();
+  });
+
+  it("rejects a non-integer year", () => {
+    expect(() =>
+      WindfallEventSchema.parse({ ...valid, year: 2030.5 })
+    ).toThrow();
+  });
+});
+
+describe("makeDefaultWindfallEvent", () => {
+  it("produces a unique id on every call", () => {
+    const a = makeDefaultWindfallEvent();
+    const b = makeDefaultWindfallEvent();
+    expect(a.id).not.toBe(b.id);
+  });
+
+  it("seeds the year five years from now", () => {
+    const event = makeDefaultWindfallEvent();
+    expect(event.year).toBe(new Date().getFullYear() + 5);
+  });
+
+  it("defaults amount to 0 so a fresh card reads as a blank slate", () => {
+    expect(makeDefaultWindfallEvent().amount).toBe(0);
+  });
+
+  it("uses the windfall type discriminator", () => {
+    expect(makeDefaultWindfallEvent().type).toBe("windfall");
   });
 });

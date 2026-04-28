@@ -13,7 +13,8 @@ import {
   type PlanInputs,
   type ProjectionPoint,
   type RealEstateHolding,
-  type RealEstateInvestmentEvent
+  type RealEstateInvestmentEvent,
+  type WindfallEvent
 } from "./index";
 
 const FIXED_NOW = new Date("2026-06-15T00:00:00Z");
@@ -40,8 +41,6 @@ const BASE_INPUTS: PlanInputs = {
   retirementAge: MAX_RETIREMENT_AGE,
   rentalIncome: 0,
   rentalIncomeRate: 0,
-  windfallAmount: 0,
-  windfallYear: 0,
   nominalReturn: 0.05,
   inflationRate: 0,
   horizonYears: 30,
@@ -89,6 +88,22 @@ function makeReEvent(
     appreciationRate: 0,
     annualRentalIncome: 0,
     rentalIncomeRate: 0,
+    ...overrides
+  };
+}
+
+// Compact factory for windfall events. Fixed ids (`wf-1`, `wf-2`, ...) so
+// failures point at a specific event.
+let wfEventCounter = 0;
+function makeWindfallEvent(
+  overrides: Partial<WindfallEvent> = {}
+): WindfallEvent {
+  wfEventCounter += 1;
+  return {
+    id: `wf-${wfEventCounter}`,
+    type: "windfall",
+    amount: 0,
+    year: 0,
     ...overrides
   };
 }
@@ -638,8 +653,12 @@ describe("projectNetWorth", () => {
         annualIncome: 0,
         monthlySpending: 0,
         nominalReturn: 0,
-        windfallAmount: 100_000,
-        windfallYear: FIXED_NOW.getFullYear() + 3
+        events: [
+          makeWindfallEvent({
+            amount: 100_000,
+            year: FIXED_NOW.getFullYear() + 3
+          })
+        ]
       },
       FIXED_NOW
     );
@@ -657,8 +676,12 @@ describe("projectNetWorth", () => {
         annualIncome: 0,
         monthlySpending: 0,
         nominalReturn: 0.1,
-        windfallAmount: 100_000,
-        windfallYear: FIXED_NOW.getFullYear() + 2
+        events: [
+          makeWindfallEvent({
+            amount: 100_000,
+            year: FIXED_NOW.getFullYear() + 2
+          })
+        ]
       },
       FIXED_NOW
     );
@@ -672,8 +695,12 @@ describe("projectNetWorth", () => {
       {
         ...BASE_INPUTS,
         horizonYears: MIN_HORIZON_YEARS,
-        windfallAmount: 100_000,
-        windfallYear: FIXED_NOW.getFullYear() - 5
+        events: [
+          makeWindfallEvent({
+            amount: 100_000,
+            year: FIXED_NOW.getFullYear() - 5
+          })
+        ]
       },
       FIXED_NOW
     );
@@ -681,8 +708,12 @@ describe("projectNetWorth", () => {
       {
         ...BASE_INPUTS,
         horizonYears: MIN_HORIZON_YEARS,
-        windfallAmount: 100_000,
-        windfallYear: FIXED_NOW.getFullYear() + MIN_HORIZON_YEARS + 5
+        events: [
+          makeWindfallEvent({
+            amount: 100_000,
+            year: FIXED_NOW.getFullYear() + MIN_HORIZON_YEARS + 5
+          })
+        ]
       },
       FIXED_NOW
     );
@@ -700,8 +731,12 @@ describe("projectNetWorth", () => {
     const withZero = projectNetWorth(
       {
         ...BASE_INPUTS,
-        windfallAmount: 0,
-        windfallYear: FIXED_NOW.getFullYear() + 5
+        events: [
+          makeWindfallEvent({
+            amount: 0,
+            year: FIXED_NOW.getFullYear() + 5
+          })
+        ]
       },
       FIXED_NOW
     );
@@ -720,14 +755,47 @@ describe("projectNetWorth", () => {
         annualIncome: 12_000,
         monthlySpending: 1_000,
         nominalReturn: 0,
-        windfallAmount: 25_000,
-        windfallYear: FIXED_NOW.getFullYear() + 4
+        events: [
+          makeWindfallEvent({
+            amount: 25_000,
+            year: FIXED_NOW.getFullYear() + 4
+          })
+        ]
       },
       FIXED_NOW
     );
     for (let i = 0; i <= 3; i += 1) expect(points[i].netWorth).toBe(50_000);
     expect(points[4].netWorth).toBe(75_000);
     expect(points[5].netWorth).toBe(75_000);
+  });
+
+  it("stacks multiple windfall events independently across years", () => {
+    const points = projectNetWorth(
+      {
+        ...BASE_INPUTS,
+        startAssets: 0,
+        cashBalance: 0,
+        annualIncome: 0,
+        monthlySpending: 0,
+        nominalReturn: 0,
+        events: [
+          makeWindfallEvent({
+            amount: 50_000,
+            year: FIXED_NOW.getFullYear() + 2
+          }),
+          makeWindfallEvent({
+            amount: 75_000,
+            year: FIXED_NOW.getFullYear() + 5
+          })
+        ]
+      },
+      FIXED_NOW
+    );
+    expect(points[1].netWorth).toBe(0);
+    expect(points[2].netWorth).toBe(50_000);
+    expect(points[4].netWorth).toBe(50_000);
+    expect(points[5].netWorth).toBe(125_000);
+    expect(points[6].netWorth).toBe(125_000);
   });
 
   it("excludes rental income from direct net-worth contribution", () => {
@@ -817,8 +885,12 @@ describe("projectNetWorth", () => {
         monthlySpending: 0,
         nominalReturn: 0,
         inflationRate,
-        windfallAmount: 100_000,
-        windfallYear: FIXED_NOW.getFullYear() + 10
+        events: [
+          makeWindfallEvent({
+            amount: 100_000,
+            year: FIXED_NOW.getFullYear() + 10
+          })
+        ]
       },
       FIXED_NOW
     );
