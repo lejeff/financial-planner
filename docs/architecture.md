@@ -361,8 +361,6 @@ The only persistent data model today is `PlanInputs`, defined as a Zod schema in
 | `monthlySpending` | number | currency | ≥ 0 |
 | `annualIncome` | number | currency | ≥ 0 |
 | `retirementAge` | number | years | 18 … 100, integer |
-| `rentalIncome` | number | currency | ≥ 0 |
-| `rentalIncomeRate` | number | fraction | −0.05 … 0.10 |
 | `nominalReturn` | number | fraction | −0.5 … 0.5 |
 | `inflationRate` | number | fraction | −0.05 … 0.15 |
 | `horizonYears` | number | years | 10 … 80 |
@@ -407,8 +405,8 @@ A future property purchase: at `purchaseYear` the engine deducts
 `purchaseAmount` (in today's money, inflated to the landing year) from the
 liquid portfolio, seeds a per-event property bucket and rental stream, then
 compounds both at the per-event rates each subsequent year. Behaves like a
-held property + `rentalIncome` but starts in the future and is funded from
-liquid assets.
+`RealEstateHolding` but starts in the future and is funded from liquid
+assets.
 
 | Field | Type | Units | Constraints |
 | --- | --- | --- | --- |

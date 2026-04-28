@@ -46,22 +46,29 @@ export function computeCurrentNetWorth(input: PlanInputs): number {
  * Annual cash-flow ratio: the share of total inflows left after recurring
  * spending, expressed as a fraction.
  *
- *   inflows  = annualIncome + rentalIncome + startAssets * nominalReturn
+ *   inflows  = annualIncome + Σ holdings.annualRentalIncome
+ *              + startAssets * nominalReturn
  *   outflows = monthlySpending * 12
  *   ratio    = (inflows - outflows) / inflows
  *
  * `startAssets * nominalReturn` is a year-1 estimate of portfolio earnings;
- * cashBalance is excluded because it does not compound in the projection. We
- * intentionally leave debt servicing out — this ratio answers "how much of
- * your gross cash flow is left over after living costs?", not "how much
- * truly free cash do you have?". Returns null when total inflows are zero
- * (so the UI can render a placeholder instead of dividing by zero). A
- * negative value means recurring expenses exceed inflows, which is
- * meaningful information to surface.
+ * cashBalance is excluded because it does not compound in the projection.
+ * Rental flows now live on individual `realEstateHoldings`, so this ratio
+ * sums the today's-money rental across every holding. We intentionally
+ * leave debt servicing out — this ratio answers "how much of your gross
+ * cash flow is left over after living costs?", not "how much truly free
+ * cash do you have?". Returns null when total inflows are zero (so the UI
+ * can render a placeholder instead of dividing by zero). A negative value
+ * means recurring expenses exceed inflows, which is meaningful information
+ * to surface.
  */
 export function computeAnnualCashFlowRatio(input: PlanInputs): number | null {
   const portfolioEarnings = input.startAssets * input.nominalReturn;
-  const inflows = input.annualIncome + input.rentalIncome + portfolioEarnings;
+  const holdingsRental = input.realEstateHoldings.reduce(
+    (sum, h) => sum + h.annualRentalIncome,
+    0
+  );
+  const inflows = input.annualIncome + holdingsRental + portfolioEarnings;
   if (inflows <= 0) return null;
   const outflows = input.monthlySpending * 12;
   return (inflows - outflows) / inflows;
@@ -128,13 +135,13 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
 
   let assets = input.startAssets + nonLiquidStartInLiquid + otherFixedStartInLiquid;
   let cash = input.cashBalance;
-  let rental = input.rentalIncome;
 
   // Currently-owned real-estate holdings: each compounds at its own
   // appreciation rate from year 0 and contributes its own rental stream
   // to liquid each year (today's-money input, compounds at the per-holding
-  // `rentalRate` from year 1 on, mirroring how the global rentalIncome
-  // used to behave). The map keys on holding.id so multiple holdings
+  // `rentalRate` from year 1 on). Rental on currently-owned property is
+  // exclusively wired here — there's no global Annual Rental Income on
+  // PlanInputs anymore. The map keys on holding.id so multiple holdings
   // stack independently and edits/removals in the form survive without
   // disturbing the others. No purchase deduction (these are owned today).
   const holdingStates = new Map<
@@ -151,10 +158,10 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
   }
 
   // Real estate investment events: dormant before their purchase year, then
-  // behave like a held property + rentalIncome (compounding value, rental
-  // flowing into netFlow). Each event carries its own running { value,
-  // rental } in nominal currency. The map keys on event.id so multiple
-  // events stack independently.
+  // behave like a future-purchase property (compounding value plus a
+  // compounding rental stream flowing into netFlow). Each event carries
+  // its own running { value, rental } in nominal currency. The map keys
+  // on event.id so multiple events stack independently.
   const reInvestmentEvents: RealEstateInvestmentEvent[] = input.events.filter(
     (e): e is RealEstateInvestmentEvent => e.type === "realEstateInvestment"
   );
@@ -178,7 +185,6 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
         state.value *= 1 + state.rate;
         state.rental *= 1 + state.rentalRate;
       }
-      rental *= 1 + input.rentalIncomeRate;
 
       // Salary and recurring expenses are entered in today's money but the
       // projection is nominal, so inflate them to the current year's value.
@@ -245,7 +251,6 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
       const afterReturn = assets * (1 + input.nominalReturn);
       const netFlow =
         salaryNominal +
-        rental +
         holdingsRental +
         reInvestmentRental -
         spendingNominal -
