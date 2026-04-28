@@ -10,10 +10,12 @@ export {
   MIN_DEBT_INTEREST_RATE,
   MIN_HORIZON_YEARS,
   MIN_RETIREMENT_AGE,
+  NewDebtEventSchema,
   PlanInputsSchema,
   RealEstateHoldingSchema,
   RealEstateInvestmentEventSchema,
   WindfallEventSchema,
+  makeDefaultNewDebtEvent,
   makeDefaultRealEstateHolding,
   makeDefaultRealEstateInvestment,
   makeDefaultWindfallEvent
@@ -21,6 +23,7 @@ export {
 export type {
   DebtRepaymentType,
   LifeEvent,
+  NewDebtEvent,
   PlanInputs,
   ProjectionPoint,
   RealEstateHolding,

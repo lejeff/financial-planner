@@ -10,6 +10,7 @@ import {
   computeRealCAGR,
   deflateToToday,
   projectNetWorth,
+  type NewDebtEvent,
   type PlanInputs,
   type ProjectionPoint,
   type RealEstateHolding,
@@ -104,6 +105,27 @@ function makeWindfallEvent(
     type: "windfall",
     amount: 0,
     year: 0,
+    ...overrides
+  };
+}
+
+// Compact factory for new-debt life events. Fixed ids (`nd-1`, `nd-2`, ...)
+// so failures point at a specific event. Defaults match the production
+// factory's spirit (zero principal, overTime repayment, 0% interest) so
+// callers can override only what each test cares about.
+let newDebtCounter = 0;
+function makeNewDebtEvent(
+  overrides: Partial<NewDebtEvent> = {}
+): NewDebtEvent {
+  newDebtCounter += 1;
+  return {
+    id: `nd-${newDebtCounter}`,
+    type: "newDebt",
+    principal: 0,
+    interestRate: 0,
+    repaymentType: "overTime",
+    startYear: 0,
+    endYear: 0,
     ...overrides
   };
 }
@@ -1765,6 +1787,232 @@ describe("real estate investment events", () => {
     const event = makeReEvent({
       purchaseAmount: 100_000,
       purchaseYear: startYear + 5
+    });
+    const inputs: PlanInputs = { ...quietBase, events: [event] };
+    const snapshot = JSON.stringify(inputs);
+    projectNetWorth(inputs, FIXED_NOW);
+    expect(JSON.stringify(inputs)).toBe(snapshot);
+  });
+});
+
+describe("new debt life events", () => {
+  const startYear = FIXED_NOW.getFullYear();
+  // Strip recurring flows so the only year-over-year movement comes from
+  // the new-debt event under test.
+  const quietBase: PlanInputs = {
+    ...BASE_INPUTS,
+    startAssets: 1_000_000,
+    cashBalance: 0,
+    annualIncome: 0,
+    monthlySpending: 0,
+    nominalReturn: 0,
+    inflationRate: 0
+  };
+
+  it("treats an empty events array as a no-op (matches baseline)", () => {
+    const baseline = projectNetWorth(quietBase, FIXED_NOW);
+    const explicit = projectNetWorth({ ...quietBase, events: [] }, FIXED_NOW);
+    for (let i = 0; i < baseline.length; i += 1) {
+      expect(explicit[i].netWorth).toBe(baseline[i].netWorth);
+      expect(explicit[i].debt).toBe(baseline[i].debt);
+    }
+  });
+
+  it("does nothing before the start year", () => {
+    const event = makeNewDebtEvent({
+      principal: 200_000,
+      interestRate: 0,
+      startYear: startYear + 5,
+      endYear: startYear + 10
+    });
+    const points = projectNetWorth(
+      { ...quietBase, events: [event] },
+      FIXED_NOW
+    );
+    for (let i = 0; i < startYear + 5 - startYear; i += 1) {
+      money(points[i].liquid, 1_000_000);
+      money(points[i].debt, 0);
+    }
+  });
+
+  it("disburses today's principal at year 0 when startYear equals the projection start", () => {
+    // Loan taken out today: principal lands in liquid at year 0 (no
+    // inflator, factor = 1), debt balance is registered immediately, and
+    // amortization picks up at year 1.
+    const event = makeNewDebtEvent({
+      principal: 100_000,
+      interestRate: 0,
+      repaymentType: "overTime",
+      startYear: startYear,
+      endYear: startYear + 5
+    });
+    const points = projectNetWorth(
+      { ...quietBase, events: [event] },
+      FIXED_NOW
+    );
+    // Year 0: liquid bumped by full principal, debt = principal.
+    money(points[0].liquid, 1_100_000);
+    money(points[0].debt, 100_000);
+    // Year 1: first payment of 20K, balance = 80K.
+    money(points[1].liquid, 1_080_000);
+    money(points[1].debt, 80_000);
+    // Year 5 (endYear): balance fully repaid.
+    money(points[5].debt, 0);
+  });
+
+  it("disburses inflated principal at startYear and registers debt balance the same year", () => {
+    // 200K at startYear+3, 5% inflation → inflated principal = 200K * 1.05^3
+    // = 231,525. With overTime + 0% rate over 5 years: annualPayment =
+    // 231,525 / 5 = 46,305. Year-end liquid = 1M (unchanged before) + 231,525
+    // (disbursement) − 46,305 (year-1 amortization) = 1,185,220.
+    // Year-end debt balance = 231,525 − 46,305 = 185,220.
+    const event = makeNewDebtEvent({
+      principal: 200_000,
+      interestRate: 0,
+      repaymentType: "overTime",
+      startYear: startYear + 3,
+      endYear: startYear + 8
+    });
+    const points = projectNetWorth(
+      { ...quietBase, inflationRate: 0.05, events: [event] },
+      FIXED_NOW
+    );
+    money(points[3].liquid, 1_185_220);
+    money(points[3].debt, 185_220);
+  });
+
+  it("amortizes overTime to zero by endYear", () => {
+    // 100K at startYear+1, 0% rate, 5-year window. Each year's payment is
+    // 20K. By endYear (startYear+6) the balance hits 0.
+    const event = makeNewDebtEvent({
+      principal: 100_000,
+      interestRate: 0,
+      repaymentType: "overTime",
+      startYear: startYear + 1,
+      endYear: startYear + 6
+    });
+    const points = projectNetWorth(
+      { ...quietBase, events: [event] },
+      FIXED_NOW
+    );
+    money(points[1].debt, 80_000);
+    money(points[2].debt, 60_000);
+    money(points[3].debt, 40_000);
+    money(points[4].debt, 20_000);
+    money(points[5].debt, 0);
+    money(points[6].debt, 0);
+  });
+
+  it("inFine pays interest only each year then balloons at endYear", () => {
+    // 100K at startYear+1, 4% rate, 3-year window with inFine. Years 1-2:
+    // interest only = 4K each. Year 3 (endYear): 4K interest + 100K
+    // principal. Debt balance is 100K through endYear, then 0.
+    const event = makeNewDebtEvent({
+      principal: 100_000,
+      interestRate: 0.04,
+      repaymentType: "inFine",
+      startYear: startYear + 1,
+      endYear: startYear + 3
+    });
+    const points = projectNetWorth(
+      {
+        ...quietBase,
+        startAssets: 200_000,
+        events: [event]
+      },
+      FIXED_NOW
+    );
+    money(points[1].debt, 100_000);
+    money(points[2].debt, 100_000);
+    money(points[3].debt, 0);
+    // Year 1: liquid = 200K (start) + 100K (disbursement) − 4K (interest) = 296K
+    money(points[1].liquid, 296_000);
+    // Year 2: 296K − 4K = 292K
+    money(points[2].liquid, 292_000);
+    // Year 3 (balloon): 292K − 4K − 100K = 188K
+    money(points[3].liquid, 188_000);
+  });
+
+  it("stacks two new debts independently across years", () => {
+    // A: 60K over 3 yrs (startYear+1 → startYear+4) → annualPayment 20K.
+    //   year 1: 60K − 20K = 40K
+    //   year 2: 40K − 20K = 20K
+    //   year 3: 20K − 20K = 0
+    //   year 4: balance already 0, no further amortization
+    // B: 100K over 5 yrs (startYear+2 → startYear+7) → annualPayment 20K.
+    //   year 2: 100K − 20K = 80K
+    //   year 3: 80K − 20K = 60K
+    //   year 4: 60K − 20K = 40K
+    //   year 5: 40K − 20K = 20K
+    //   year 6: 20K − 20K = 0
+    //   year 7: balance already 0
+    const a = makeNewDebtEvent({
+      principal: 60_000,
+      interestRate: 0,
+      repaymentType: "overTime",
+      startYear: startYear + 1,
+      endYear: startYear + 4
+    });
+    const b = makeNewDebtEvent({
+      principal: 100_000,
+      interestRate: 0,
+      repaymentType: "overTime",
+      startYear: startYear + 2,
+      endYear: startYear + 7
+    });
+    const points = projectNetWorth(
+      { ...quietBase, events: [a, b] },
+      FIXED_NOW
+    );
+    money(points[1].debt, 40_000); // A only
+    money(points[2].debt, 20_000 + 80_000); // A:20K + B:80K
+    money(points[3].debt, 0 + 60_000); // A done, B:60K
+    money(points[4].debt, 0 + 40_000); // A done, B:40K
+    money(points[6].debt, 0 + 0); // both done
+    money(points[7].debt, 0); // B endYear, already 0
+  });
+
+  it("ignores a new debt with startYear beyond the projection horizon", () => {
+    const event = makeNewDebtEvent({
+      principal: 500_000,
+      interestRate: 0.05,
+      startYear: startYear + 100,
+      endYear: startYear + 110
+    });
+    const baseline = projectNetWorth(quietBase, FIXED_NOW);
+    const withEvent = projectNetWorth(
+      { ...quietBase, events: [event] },
+      FIXED_NOW
+    );
+    for (let i = 0; i < baseline.length; i += 1) {
+      money(withEvent[i].netWorth, baseline[i].netWorth);
+      money(withEvent[i].debt, baseline[i].debt);
+    }
+  });
+
+  it("treats a zero-principal event as a no-op (matches baseline)", () => {
+    const event = makeNewDebtEvent({
+      principal: 0,
+      startYear: startYear + 3,
+      endYear: startYear + 8
+    });
+    const baseline = projectNetWorth(quietBase, FIXED_NOW);
+    const withEvent = projectNetWorth(
+      { ...quietBase, events: [event] },
+      FIXED_NOW
+    );
+    for (let i = 0; i < baseline.length; i += 1) {
+      money(withEvent[i].netWorth, baseline[i].netWorth);
+      money(withEvent[i].debt, baseline[i].debt);
+    }
+  });
+
+  it("does not mutate the input events array", () => {
+    const event = makeNewDebtEvent({
+      principal: 100_000,
+      interestRate: 0.04,
+      startYear: startYear + 2,
+      endYear: startYear + 7
     });
     const inputs: PlanInputs = { ...quietBase, events: [event] };
     const snapshot = JSON.stringify(inputs);

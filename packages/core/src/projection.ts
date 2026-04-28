@@ -1,4 +1,5 @@
 import type {
+  NewDebtEvent,
   PlanInputs,
   ProjectionPoint,
   RealEstateInvestmentEvent,
@@ -177,6 +178,48 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
     (e): e is WindfallEvent => e.type === "windfall"
   );
 
+  // New debt life events: at `event.startYear` the engine seeds a per-event
+  // balance (today's-money principal inflated to the landing year), starts
+  // amortizing on its own schedule until `event.endYear`, and disburses the
+  // principal as cash to the liquid portfolio at year-end (windfall
+  // convention). Each event runs independently of the top-level Debt and of
+  // every other new-debt event. The map keys on event.id so multiple
+  // events stack and edits/removals in the form survive without disturbing
+  // the others.
+  const newDebtEvents: NewDebtEvent[] = input.events.filter(
+    (e): e is NewDebtEvent => e.type === "newDebt"
+  );
+  const newDebtStates = new Map<
+    string,
+    { balance: number; annualPayment: number }
+  >();
+  for (const event of newDebtEvents) {
+    newDebtStates.set(event.id, { balance: 0, annualPayment: 0 });
+  }
+
+  // Year-0 disbursement: a new debt with `startYear === startYear` (i.e.
+  // taken out today) misses the in-loop seeding path because the loop body
+  // is gated on `i > 0` (year-0 has no payments, no inflation, no flows).
+  // Seed the balance + annualPayment and disburse principal to liquid here
+  // so the year-0 projection point reflects the loan, then in-loop
+  // amortization picks up at year-1 once `year >= startYear` is true.
+  // No inflator at year 0 (factor = 1), so principal lands at face value.
+  for (const event of newDebtEvents) {
+    if (event.startYear === startYear && event.principal > 0) {
+      const state = newDebtStates.get(event.id)!;
+      state.balance = event.principal;
+      if (event.repaymentType === "overTime") {
+        const term = Math.max(event.endYear - event.startYear, 1);
+        state.annualPayment = computeOverTimeAnnualPayment(
+          state.balance,
+          event.interestRate,
+          term
+        );
+      }
+      assets += event.principal;
+    }
+  }
+
   const points: ProjectionPoint[] = [];
 
   for (let i = 0; i <= years; i += 1) {
@@ -243,6 +286,53 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
         }
       }
 
+      // New debt life events: seed the per-event balance + annual payment at
+      // `startYear` (no asset side effect yet — disbursement happens after
+      // netFlow, mirroring the windfall convention), then amortize each
+      // active event into `newDebtCashOut` for inclusion in netFlow's
+      // outflow leg. The same year that disburses principal also makes the
+      // first payment, so `assets` nets to (principal − first payment) at
+      // year-end.
+      let newDebtCashOut = 0;
+      for (const event of newDebtEvents) {
+        const state = newDebtStates.get(event.id)!;
+        if (year === event.startYear && event.principal > 0) {
+          state.balance = event.principal * inflator;
+          if (event.repaymentType === "overTime") {
+            const term = Math.max(event.endYear - event.startYear, 1);
+            state.annualPayment = computeOverTimeAnnualPayment(
+              state.balance,
+              event.interestRate,
+              term
+            );
+          }
+        }
+        if (
+          state.balance > 0 &&
+          year >= event.startYear &&
+          year <= event.endYear
+        ) {
+          if (event.repaymentType === "overTime") {
+            const interest = state.balance * event.interestRate;
+            const principal = Math.min(
+              Math.max(state.annualPayment - interest, 0),
+              state.balance
+            );
+            newDebtCashOut += interest + principal;
+            state.balance -= principal;
+            if (state.balance < 1e-6) state.balance = 0;
+          } else {
+            // inFine: interest-only each year, full principal due at endYear.
+            if (year < event.endYear) {
+              newDebtCashOut += state.balance * event.interestRate;
+            } else {
+              newDebtCashOut += state.balance * event.interestRate + state.balance;
+              state.balance = 0;
+            }
+          }
+        }
+      }
+
       let holdingsRental = 0;
       for (const state of holdingStates.values()) {
         holdingsRental += state.rental;
@@ -254,7 +344,8 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
         holdingsRental +
         reInvestmentRental -
         spendingNominal -
-        debtCashOut;
+        debtCashOut -
+        newDebtCashOut;
 
       if (netFlow >= 0) {
         assets = afterReturn + netFlow;
@@ -273,6 +364,17 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
       for (const event of windfallEvents) {
         if (startYear + i === event.year && event.amount > 0) {
           assets += event.amount * inflator;
+        }
+      }
+
+      // New debt principal: at startYear, disburse the today's-money
+      // principal (inflated to the landing year) into liquid assets at
+      // year-end. The amortization for this year already ran in netFlow
+      // above, so the net assets impact this year is (principal − first
+      // payment); subsequent years are pure amortization.
+      for (const event of newDebtEvents) {
+        if (startYear + i === event.startYear && event.principal > 0) {
+          assets += event.principal * inflator;
         }
       }
 
@@ -307,18 +409,23 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
     for (const state of holdingStates.values()) {
       holdingsValue += state.value;
     }
+    let newDebtBalance = 0;
+    for (const state of newDebtStates.values()) {
+      newDebtBalance += state.balance;
+    }
+    const totalDebt = debtBalance + newDebtBalance;
     const savings = assets + cash;
     const otherAssets = nonLiquid + otherFixed;
     const realEstate = holdingsValue + reInvestmentValue;
     points.push({
       year: startYear + i,
       age: currentAge + i,
-      netWorth: realEstate + savings + otherAssets - debtBalance,
+      netWorth: realEstate + savings + otherAssets - totalDebt,
       liquid: assets + cash,
       savings,
       otherAssets,
       realEstate,
-      debt: debtBalance
+      debt: totalDebt
     });
   }
 

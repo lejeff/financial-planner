@@ -5,6 +5,7 @@ import { CurrencyField } from "./CurrencyField";
 import { FramedField } from "./FramedField";
 import { useCurrency } from "@/features/currency/CurrencyContext";
 import {
+  DEBT_REPAYMENT_TYPES,
   MAX_APPRECIATION,
   MAX_DEBT_INTEREST_RATE,
   MAX_HORIZON_YEARS,
@@ -14,11 +15,13 @@ import {
   MIN_HORIZON_YEARS,
   MIN_RETIREMENT_AGE,
   computeOverTimeAnnualPayment,
+  makeDefaultNewDebtEvent,
   makeDefaultRealEstateHolding,
   makeDefaultRealEstateInvestment,
   makeDefaultWindfallEvent,
   type DebtRepaymentType,
   type LifeEvent,
+  type NewDebtEvent,
   type PlanInputs,
   type RealEstateHolding,
   type RealEstateInvestmentEvent,
@@ -200,6 +203,7 @@ function summarizeLifeEvents(
     (e): e is WindfallEvent => e.type === "windfall"
   );
   const reCount = v.events.filter((e) => e.type === "realEstateInvestment").length;
+  const newDebtCount = v.events.filter((e) => e.type === "newDebt").length;
   const parts: string[] = [];
   // When there's exactly one windfall, surface its amount + year inline
   // (preserves the "Windfall $50K in 2031" line the form had before it
@@ -217,6 +221,9 @@ function summarizeLifeEvents(
   }
   if (reCount > 0) {
     parts.push(`${reCount} real estate investment${reCount === 1 ? "" : "s"}`);
+  }
+  if (newDebtCount > 0) {
+    parts.push(`${newDebtCount} new debt${newDebtCount === 1 ? "" : "s"}`);
   }
   return parts.length === 0 ? "None scheduled" : parts.join(" · ");
 }
@@ -258,12 +265,23 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
     });
   };
 
+  const addNewDebtEvent = () => {
+    onChange({
+      ...value,
+      events: [...value.events, makeDefaultNewDebtEvent()]
+    });
+  };
+
   const reInvestments = value.events.filter(
     (e): e is RealEstateInvestmentEvent => e.type === "realEstateInvestment"
   );
 
   const windfalls = value.events.filter(
     (e): e is WindfallEvent => e.type === "windfall"
+  );
+
+  const newDebts = value.events.filter(
+    (e): e is NewDebtEvent => e.type === "newDebt"
   );
 
   const updateHolding = (id: string, patch: Partial<RealEstateHolding>) => {
@@ -610,6 +628,31 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
               style={{ borderColor: ACCENT.lifeEvents, color: ACCENT.lifeEvents }}
             >
               + Add Real Estate Investment
+            </button>
+          </div>
+
+          <div className="space-y-3 pt-2">
+            {newDebts.map((event, index) => (
+              <NewDebtEventCard
+                key={event.id}
+                event={event}
+                index={index}
+                accent={ACCENT.lifeEvents}
+                yearMin={yearSliderMin}
+                yearMax={yearSliderMax}
+                currentYear={currentYear}
+                inflationRate={value.inflationRate}
+                onChange={(patch) => updateEvent(event.id, patch)}
+                onRemove={() => removeEvent(event.id)}
+              />
+            ))}
+            <button
+              type="button"
+              onClick={addNewDebtEvent}
+              className="btn-ghost w-full justify-center"
+              style={{ borderColor: ACCENT.lifeEvents, color: ACCENT.lifeEvents }}
+            >
+              + Add New Debt
             </button>
           </div>
         </CollapsibleCategory>
@@ -986,6 +1029,189 @@ function WindfallEventCard({
         </button>
       </div>
     </fieldset>
+  );
+}
+
+function NewDebtEventCard({
+  event,
+  index,
+  accent,
+  yearMin,
+  yearMax,
+  currentYear,
+  inflationRate,
+  onChange,
+  onRemove
+}: {
+  event: NewDebtEvent;
+  index: number;
+  accent: string;
+  yearMin: number;
+  yearMax: number;
+  currentYear: number;
+  inflationRate: number;
+  onChange: (patch: Partial<NewDebtEvent>) => void;
+  onRemove: () => void;
+}) {
+  const { format } = useCurrency();
+  // Match the projection engine: today's-money inputs are inflated to the
+  // landing year. Clamp the exponent at 0 so a past startYear still shows
+  // the user's entered amount instead of a deflated one.
+  const yearsToStart = Math.max(0, event.startYear - currentYear);
+  const inflatedPrincipal = event.principal * (1 + inflationRate) ** yearsToStart;
+
+  const interestRateSpec: SliderSpec = {
+    key: "newDebtInterestRate",
+    label: "Annual interest rate",
+    min: MIN_DEBT_INTEREST_RATE,
+    max: MAX_DEBT_INTEREST_RATE,
+    step: 0.001,
+    format: percent
+  };
+
+  const startYearSpec: SliderSpec = {
+    key: "newDebtStartYear",
+    label: "Start year",
+    min: yearMin,
+    max: yearMax,
+    step: 1,
+    format: rawYear
+  };
+
+  const endYearLabel =
+    event.repaymentType === "inFine" ? "Lump sum repayment year" : "Loan end year";
+  const endYearSpec: SliderSpec = {
+    key: "newDebtEndYear",
+    label: endYearLabel,
+    min: yearMin,
+    max: yearMax,
+    step: 1,
+    format: rawYear
+  };
+
+  return (
+    <fieldset
+      className="relative space-y-3 rounded-[1rem] border bg-[var(--surface)] px-3 py-3 md:px-4"
+      style={{ borderColor: `color-mix(in oklab, ${accent} 50%, transparent)` }}
+      data-testid={`new-debt-card-${index}`}
+    >
+      <legend className="px-1 text-[12px] font-semibold" style={{ color: accent }}>
+        New Debt {index + 1}
+      </legend>
+      <CurrencyField
+        label="Principal"
+        value={event.principal}
+        onChange={(next) => onChange({ principal: next })}
+        min={0}
+        max={100_000_000}
+      />
+      <SliderRow
+        spec={interestRateSpec}
+        value={event.interestRate}
+        onChange={(next) => onChange({ interestRate: next })}
+      />
+      <FramedField label="Repayment type">
+        <select
+          value={event.repaymentType}
+          onChange={(e) =>
+            onChange({
+              repaymentType: e.target.value as DebtRepaymentType
+            })
+          }
+          className="field-input"
+          aria-label={`Repayment type for new debt ${index + 1}`}
+        >
+          {DEBT_REPAYMENT_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t === "overTime" ? "Over Time" : "In Fine"}
+            </option>
+          ))}
+        </select>
+      </FramedField>
+      <SliderRow
+        spec={startYearSpec}
+        value={event.startYear}
+        onChange={(next) => onChange({ startYear: next })}
+        helper={
+          // Surface the inflation-adjusted nominal disbursement (what the
+          // engine actually deposits into liquid in that year) next to the
+          // relative timing, e.g. "€220K in 3 years". On a blank-slate card
+          // we drop back to just the relative phrase.
+          event.principal > 0
+            ? `${format(inflatedPrincipal)} ${yearsFromNow(event.startYear, currentYear)}`
+            : yearsFromNow(event.startYear, currentYear)
+        }
+      />
+      <SliderRow
+        spec={endYearSpec}
+        value={event.endYear}
+        onChange={(next) => onChange({ endYear: next })}
+        helper={yearsFromNow(event.endYear, currentYear)}
+      />
+      <NewDebtScheduleSummary
+        event={event}
+        index={index}
+        inflatedPrincipal={inflatedPrincipal}
+        format={format}
+      />
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={onRemove}
+          className="btn-ghost text-[var(--ink-muted)]"
+          aria-label={`Remove new debt ${index + 1}`}
+        >
+          Remove
+        </button>
+      </div>
+    </fieldset>
+  );
+}
+
+// Mirrors `DebtScheduleSummary` (the one under the top-level Debt
+// subsection) but keyed off a single new-debt event. The principal we
+// schedule on is the inflated principal — what the engine actually
+// disburses at `startYear` — so the displayed payment matches the cash
+// flow the user will see in the chart in nominal terms.
+function NewDebtScheduleSummary({
+  event,
+  index,
+  inflatedPrincipal,
+  format
+}: {
+  event: NewDebtEvent;
+  index: number;
+  inflatedPrincipal: number;
+  format: (v: number) => string;
+}) {
+  const term = Math.max(0, event.endYear - event.startYear);
+
+  const text = (() => {
+    if (inflatedPrincipal <= 0) return "No principal entered.";
+    if (term <= 0)
+      return "End year is at or before start year — no scheduled payments.";
+
+    if (event.repaymentType === "overTime") {
+      const annual = computeOverTimeAnnualPayment(
+        inflatedPrincipal,
+        event.interestRate,
+        term
+      );
+      const yearsLabel = `${term} year${term === 1 ? "" : "s"}`;
+      return `Annual repayment (capital + interest): ${format(annual)} for ${yearsLabel}.`;
+    }
+
+    const annualInterest = inflatedPrincipal * event.interestRate;
+    return `Annual interest payment: ${format(annualInterest)} · Lump sum of ${format(inflatedPrincipal)} in ${event.endYear}.`;
+  })();
+
+  return (
+    <p
+      data-testid={`new-debt-schedule-summary-${index}`}
+      className="text-xs leading-relaxed text-[var(--ink-muted)]"
+    >
+      {text}
+    </p>
   );
 }
 

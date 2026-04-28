@@ -83,13 +83,16 @@ describe("PlannerForm layout", () => {
     ).toBeNull();
   });
 
-  it("renders an empty Life Events category with both Add buttons by default", async () => {
+  it("renders an empty Life Events category with all three Add buttons by default", async () => {
     render(<Host />);
     await expand(/life events/i);
     const fs = screen.getByText("Life Events").closest("fieldset")!;
-    // No windfall card or windfall fields rendered before any are added.
+    // No event card or card-internal field rendered before any are added.
     expect(within(fs).queryByTestId("windfall-card-0")).toBeNull();
+    expect(within(fs).queryByTestId("re-investment-card-0")).toBeNull();
+    expect(within(fs).queryByTestId("new-debt-card-0")).toBeNull();
     expect(within(fs).queryByLabelText("Amount")).toBeNull();
+    expect(within(fs).queryByLabelText("Principal")).toBeNull();
     expect(
       within(fs).getByRole("button", { name: /^\+ add windfall$/i })
     ).toBeInTheDocument();
@@ -97,6 +100,9 @@ describe("PlannerForm layout", () => {
       within(fs).getByRole("button", {
         name: /^\+ add real estate investment$/i
       })
+    ).toBeInTheDocument();
+    expect(
+      within(fs).getByRole("button", { name: /^\+ add new debt$/i })
     ).toBeInTheDocument();
   });
 
@@ -896,5 +902,140 @@ describe("Real estate holdings", () => {
     await user.click(screen.getByRole("button", { name: /^real estate$/i }));
     expect(screen.queryByText("\u2014")).toBeNull();
     expect(screen.getByText(/450K/)).toBeInTheDocument();
+  });
+});
+
+describe("New debt events", () => {
+  it("renders no new-debt cards by default", async () => {
+    render(<Host />);
+    await expand(/life events/i);
+    expect(screen.queryByTestId("new-debt-card-0")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /^\+ add new debt$/i })
+    ).toBeInTheDocument();
+  });
+
+  it("adds a card with Principal + interest rate + repayment + start year + end year when Add is clicked", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    await user.click(screen.getByRole("button", { name: /^\+ add new debt$/i }));
+    const card = screen.getByTestId("new-debt-card-0");
+    expect(within(card).getByLabelText("Principal")).toBeInTheDocument();
+    expect(within(card).getByText("Annual interest rate")).toBeInTheDocument();
+    expect(
+      within(card).getByLabelText(/repayment type for new debt 1/i)
+    ).toBeInTheDocument();
+    expect(within(card).getByText("Start year")).toBeInTheDocument();
+    expect(within(card).getByText("Loan end year")).toBeInTheDocument();
+    // Defaults: principal 0, startYear current+5, endYear current+10.
+    const principal = within(card).getByLabelText("Principal") as HTMLInputElement;
+    expect(principal.value).toBe("0");
+  });
+
+  it("renders the end-year label as 'Lump sum repayment year' when repayment is inFine", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    await user.click(screen.getByRole("button", { name: /^\+ add new debt$/i }));
+    const card = screen.getByTestId("new-debt-card-0");
+    const select = within(card).getByLabelText(
+      /repayment type for new debt 1/i
+    ) as HTMLSelectElement;
+    await user.selectOptions(select, "inFine");
+    expect(
+      within(card).getByText("Lump sum repayment year")
+    ).toBeInTheDocument();
+    expect(within(card).queryByText("Loan end year")).toBeNull();
+  });
+
+  it("stacks multiple new-debt cards independently", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    const addBtn = screen.getByRole("button", { name: /^\+ add new debt$/i });
+    await user.click(addBtn);
+    await user.click(addBtn);
+    expect(screen.getByTestId("new-debt-card-0")).toBeInTheDocument();
+    expect(screen.getByTestId("new-debt-card-1")).toBeInTheDocument();
+  });
+
+  it("updates a specific card's principal without affecting siblings", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    const addBtn = screen.getByRole("button", { name: /^\+ add new debt$/i });
+    await user.click(addBtn);
+    await user.click(addBtn);
+    const cardA = screen.getByTestId("new-debt-card-0");
+    const cardB = screen.getByTestId("new-debt-card-1");
+    const principalA = within(cardA).getByLabelText("Principal") as HTMLInputElement;
+    const principalB = within(cardB).getByLabelText("Principal") as HTMLInputElement;
+
+    await user.clear(principalA);
+    await user.type(principalA, "200000");
+    await user.tab();
+
+    expect(principalA.value).toBe("200,000");
+    expect(principalB.value).toBe("0");
+  });
+
+  it("removes a specific card when its remove button is clicked", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    const addBtn = screen.getByRole("button", { name: /^\+ add new debt$/i });
+    await user.click(addBtn);
+    await user.click(addBtn);
+    expect(screen.getByTestId("new-debt-card-1")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /remove new debt 1/i })
+    );
+
+    // After removal of the first card, the remaining one re-indexes to 0.
+    expect(screen.getByTestId("new-debt-card-0")).toBeInTheDocument();
+    expect(screen.queryByTestId("new-debt-card-1")).toBeNull();
+  });
+
+  it("includes the new-debt count in the collapsed Life Events summary", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    const addBtn = screen.getByRole("button", { name: /^\+ add new debt$/i });
+    await user.click(addBtn);
+    await user.click(addBtn);
+    // Collapse Life Events so the summary pill renders.
+    await user.click(screen.getByRole("button", { name: /^life events$/i }));
+    expect(screen.getByText(/2 new debts/i)).toBeInTheDocument();
+  });
+
+  it("shows the inflation-adjusted principal in the Start year helper when principal > 0", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    await user.click(screen.getByRole("button", { name: /^\+ add new debt$/i }));
+    const card = screen.getByTestId("new-debt-card-0");
+    const principal = within(card).getByLabelText("Principal") as HTMLInputElement;
+
+    // Default startYear = currentYear + 5; default inflation = 2%.
+    // With principal = 100K, inflated = 100_000 * 1.02^5 ≈ 110,408.
+    await user.clear(principal);
+    await user.type(principal, "100000");
+    await user.tab();
+
+    expect(within(card).getByText(/in 5 years/i)).toBeInTheDocument();
+    // The inflated amount appears in the helper line; assert a substring of
+    // the rounded value (locale formatting may vary on the symbol/separator).
+    expect(within(card).getByText(/110/)).toBeInTheDocument();
+  });
+
+  it("falls back to just the relative phrase in the Start year helper when principal is 0", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    await user.click(screen.getByRole("button", { name: /^\+ add new debt$/i }));
+    const card = screen.getByTestId("new-debt-card-0");
+    expect(within(card).getByText("in 5 years")).toBeInTheDocument();
   });
 });

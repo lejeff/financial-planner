@@ -138,6 +138,54 @@ describe("loadInputs", () => {
     expect(loadInputs().events).toEqual([windfall, reInvestment]);
   });
 
+  it("preserves a valid stored newDebt event on load", () => {
+    const newDebt = {
+      id: "nd-1",
+      type: "newDebt",
+      principal: 200_000,
+      interestRate: 0.04,
+      repaymentType: "overTime",
+      startYear: 2030,
+      endYear: 2040
+    };
+    const stored = JSON.stringify({
+      ...DEFAULT_PLAN_INPUTS,
+      events: [newDebt]
+    });
+    stubStorage({ "planner.inputs.v1": stored });
+
+    expect(loadInputs().events).toEqual([newDebt]);
+  });
+
+  it("preserves a mix of all three life event variants on load", () => {
+    const windfall = { id: "wf-1", type: "windfall", amount: 25_000, year: 2030 };
+    const reInvestment = {
+      id: "re-1",
+      type: "realEstateInvestment",
+      purchaseAmount: 200_000,
+      purchaseYear: 2032,
+      appreciationRate: 0.02,
+      annualRentalIncome: 6_000,
+      rentalIncomeRate: 0.01
+    };
+    const newDebt = {
+      id: "nd-1",
+      type: "newDebt",
+      principal: 100_000,
+      interestRate: 0.03,
+      repaymentType: "inFine",
+      startYear: 2031,
+      endYear: 2036
+    };
+    const stored = JSON.stringify({
+      ...DEFAULT_PLAN_INPUTS,
+      events: [windfall, reInvestment, newDebt]
+    });
+    stubStorage({ "planner.inputs.v1": stored });
+
+    expect(loadInputs().events).toEqual([windfall, reInvestment, newDebt]);
+  });
+
   it("falls back to [] when stored events array is malformed (keeps other fields)", () => {
     const stored = JSON.stringify({
       ...DEFAULT_PLAN_INPUTS,

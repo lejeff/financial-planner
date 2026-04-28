@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_PLAN_INPUTS,
   LifeEventSchema,
+  NewDebtEventSchema,
   PlanInputsSchema,
   RealEstateHoldingSchema,
   RealEstateInvestmentEventSchema,
   WindfallEventSchema,
+  makeDefaultNewDebtEvent,
   makeDefaultRealEstateHolding,
   makeDefaultRealEstateInvestment,
   makeDefaultWindfallEvent
@@ -188,6 +190,12 @@ describe("LifeEventSchema", () => {
     expect(parsed.type).toBe("windfall");
   });
 
+  it("discriminates a new debt by type", () => {
+    const nd = makeDefaultNewDebtEvent();
+    const parsed = LifeEventSchema.parse(nd);
+    expect(parsed.type).toBe("newDebt");
+  });
+
   it("rejects an unknown type variant", () => {
     expect(() =>
       LifeEventSchema.parse({
@@ -365,5 +373,101 @@ describe("makeDefaultWindfallEvent", () => {
 
   it("uses the windfall type discriminator", () => {
     expect(makeDefaultWindfallEvent().type).toBe("windfall");
+  });
+});
+
+describe("NewDebtEventSchema", () => {
+  const valid = makeDefaultNewDebtEvent();
+
+  it("accepts a freshly-built default new debt event", () => {
+    expect(() => NewDebtEventSchema.parse(valid)).not.toThrow();
+  });
+
+  it("rejects a missing id", () => {
+    const { id: _id, ...rest } = valid;
+    expect(() => NewDebtEventSchema.parse(rest)).toThrow();
+  });
+
+  it("rejects an empty id", () => {
+    expect(() => NewDebtEventSchema.parse({ ...valid, id: "" })).toThrow();
+  });
+
+  it("rejects a wrong type literal", () => {
+    expect(() =>
+      NewDebtEventSchema.parse({ ...valid, type: "windfall" })
+    ).toThrow();
+  });
+
+  it("rejects a negative principal", () => {
+    expect(() =>
+      NewDebtEventSchema.parse({ ...valid, principal: -1 })
+    ).toThrow();
+  });
+
+  it("rejects a non-finite principal", () => {
+    expect(() =>
+      NewDebtEventSchema.parse({
+        ...valid,
+        principal: Number.POSITIVE_INFINITY
+      })
+    ).toThrow();
+  });
+
+  it("rejects an interestRate outside the global debt rate bounds", () => {
+    expect(() =>
+      NewDebtEventSchema.parse({ ...valid, interestRate: 0.5 })
+    ).toThrow();
+    expect(() =>
+      NewDebtEventSchema.parse({ ...valid, interestRate: -0.01 })
+    ).toThrow();
+  });
+
+  it("rejects an unknown repaymentType", () => {
+    expect(() =>
+      NewDebtEventSchema.parse({ ...valid, repaymentType: "balloon" })
+    ).toThrow();
+  });
+
+  it("rejects a non-integer startYear", () => {
+    expect(() =>
+      NewDebtEventSchema.parse({ ...valid, startYear: 2030.5 })
+    ).toThrow();
+  });
+
+  it("rejects a non-integer endYear", () => {
+    expect(() =>
+      NewDebtEventSchema.parse({ ...valid, endYear: 2040.5 })
+    ).toThrow();
+  });
+});
+
+describe("makeDefaultNewDebtEvent", () => {
+  it("produces a unique id on every call", () => {
+    const a = makeDefaultNewDebtEvent();
+    const b = makeDefaultNewDebtEvent();
+    expect(a.id).not.toBe(b.id);
+  });
+
+  it("seeds startYear five years from now and endYear ten years from now", () => {
+    const event = makeDefaultNewDebtEvent();
+    const currentYear = new Date().getFullYear();
+    expect(event.startYear).toBe(currentYear + 5);
+    expect(event.endYear).toBe(currentYear + 10);
+  });
+
+  it("defaults principal to 0 so a fresh card reads as a blank slate", () => {
+    expect(makeDefaultNewDebtEvent().principal).toBe(0);
+  });
+
+  it("defaults interestRate to 2% (matches the global DEFAULT_RATE)", () => {
+    expect(makeDefaultNewDebtEvent().interestRate).toBe(0.02);
+  });
+
+  it("defaults repaymentType to overTime", () => {
+    expect(makeDefaultNewDebtEvent().repaymentType).toBe("overTime");
+  });
+
+  it("uses the newDebt type discriminator", () => {
+    expect(makeDefaultNewDebtEvent().type).toBe("newDebt");
   });
 });

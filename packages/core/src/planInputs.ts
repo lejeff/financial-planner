@@ -54,9 +54,33 @@ export const WindfallEventSchema = z.object({
 
 export type WindfallEvent = z.infer<typeof WindfallEventSchema>;
 
+// A future loan: at `startYear` the engine deposits `principal` (in today's
+// money, inflated to the landing year — same convention as windfall and RE
+// purchase) into the liquid portfolio and starts amortizing on its own
+// schedule until `endYear`. Mirrors the existing top-level Debt fields
+// (`startDebt`, `debtInterestRate`, `debtRepaymentType`, `debtEndYear`)
+// but adds a `startYear` so multiple future loans can be stacked, each
+// active on its own window.
+export const NewDebtEventSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("newDebt"),
+  principal: z.number().finite().nonnegative(),
+  interestRate: z
+    .number()
+    .finite()
+    .min(MIN_DEBT_INTEREST_RATE)
+    .max(MAX_DEBT_INTEREST_RATE),
+  repaymentType: z.enum(DEBT_REPAYMENT_TYPES),
+  startYear: z.number().int(),
+  endYear: z.number().int()
+});
+
+export type NewDebtEvent = z.infer<typeof NewDebtEventSchema>;
+
 export const LifeEventSchema = z.discriminatedUnion("type", [
   RealEstateInvestmentEventSchema,
-  WindfallEventSchema
+  WindfallEventSchema,
+  NewDebtEventSchema
 ]);
 
 export type LifeEvent = z.infer<typeof LifeEventSchema>;
@@ -223,5 +247,24 @@ export function makeDefaultWindfallEvent(): WindfallEvent {
     type: "windfall",
     amount: 0,
     year: new Date().getFullYear() + 5
+  };
+}
+
+// Factory for a fresh new-debt life event with zero principal, a 2% rate,
+// `overTime` repayment, and a 5-year window starting 5 years out (currentYear
+// + 5 → currentYear + 10). Defaults mirror the existing top-level Debt
+// defaults so a freshly-added card reads as a familiar blank loan the user
+// fills in deliberately. The id is a uuid so it survives reorders and
+// re-renders.
+export function makeDefaultNewDebtEvent(): NewDebtEvent {
+  const currentYear = new Date().getFullYear();
+  return {
+    id: crypto.randomUUID(),
+    type: "newDebt",
+    principal: 0,
+    interestRate: DEFAULT_RATE,
+    repaymentType: "overTime",
+    startYear: currentYear + 5,
+    endYear: currentYear + 10
   };
 }

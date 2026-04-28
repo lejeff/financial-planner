@@ -396,7 +396,7 @@ purchase deduction (the asset is already owned). Each carries a stable `id`
 
 A discriminated union keyed by `type`, persisted as part of `PlanInputs`. Each
 variant carries a stable `id` (uuid) so the form can edit/remove a specific
-entry across renders. There are two variants today; new variants drop in by
+entry across renders. There are three variants today; new variants drop in by
 adding another schema to `LifeEventSchema` in `packages/core/src/planInputs.ts`.
 
 ##### `RealEstateInvestmentEvent` (`type: "realEstateInvestment"`)
@@ -432,6 +432,31 @@ matches the projection's calendar year.
 | `type` | literal | — | `"windfall"` |
 | `amount` | number | currency (today's money) | ≥ 0 |
 | `year` | number | year | integer |
+
+##### `NewDebtEvent` (`type: "newDebt"`)
+
+A future loan: at `startYear` the engine deposits `principal` (in today's
+money, inflated to the landing year — same convention as `WindfallEvent` and
+`RealEstateInvestmentEvent.purchaseAmount`) into liquid assets and starts
+amortizing on its own schedule until `endYear`. `repaymentType: "overTime"`
+uses the closed-form fixed annual payment that fully repays principal over
+the (`endYear` − `startYear`) window; `"inFine"` pays interest only each
+year and balloons the principal at `endYear`. The same year that disburses
+principal also makes the first payment, so the year-end liquid impact is
+(principal − first payment); subsequent years are pure amortization. Each
+event runs independently of the top-level `startDebt` and of every other
+new-debt event; the per-event balance is summed into the projection point's
+`debt` field alongside the top-level debt balance.
+
+| Field | Type | Units | Constraints |
+| --- | --- | --- | --- |
+| `id` | string | — | non-empty (uuid in practice) |
+| `type` | literal | — | `"newDebt"` |
+| `principal` | number | currency (today's money) | ≥ 0 |
+| `interestRate` | number | fraction | 0 … 0.20 |
+| `repaymentType` | enum | — | `"overTime"` \| `"inFine"` |
+| `startYear` | number | year | integer |
+| `endYear` | number | year | integer |
 
 Derived output: `ProjectionPoint[]` with `{ year, age, netWorth, liquid, savings, otherAssets, realEstate, debt }`.
 
