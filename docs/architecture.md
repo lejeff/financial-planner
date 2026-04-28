@@ -377,11 +377,13 @@ The only persistent data model today is `PlanInputs`, defined as a Zod schema in
 #### `RealEstateHolding`
 
 A property the user owns today: a `value` (in today's money) plus an annual
-`appreciationRate`. Each entry compounds independently from year 0; the engine
-sums them into the same `realEstate` bucket as any `RealEstateInvestmentEvent`
-contributions. No purchase deduction (the asset is already owned) and no rental
-flow (rental belongs on `RealEstateInvestmentEvent`). Each carries a stable
-`id` (uuid) so the form can edit/remove a specific entry across renders.
+`appreciationRate`, with an optional rental stream (`annualRentalIncome` in
+today's money plus its own `rentalIncomeRate` annual growth). Each entry
+compounds independently from year 0; the engine sums values into the same
+`realEstate` bucket as any `RealEstateInvestmentEvent` contributions and adds
+each holding's compounding rental into the netFlow alongside salary. No
+purchase deduction (the asset is already owned). Each carries a stable `id`
+(uuid) so the form can edit/remove a specific entry across renders.
 
 | Field | Type | Units | Constraints |
 | --- | --- | --- | --- |
@@ -389,6 +391,8 @@ flow (rental belongs on `RealEstateInvestmentEvent`). Each carries a stable
 | `type` | literal | — | `"realEstateHolding"` |
 | `value` | number | currency | ≥ 0 |
 | `appreciationRate` | number | fraction | −0.05 … 0.10 |
+| `annualRentalIncome` | number | currency / year | ≥ 0 (today's money) |
+| `rentalIncomeRate` | number | fraction | −0.05 … 0.10 |
 
 #### `LifeEvent` variants
 

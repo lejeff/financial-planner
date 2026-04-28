@@ -147,7 +147,9 @@ describe("loadInputs", () => {
       id: "h1",
       type: "realEstateHolding",
       value: 450_000,
-      appreciationRate: 0.025
+      appreciationRate: 0.025,
+      annualRentalIncome: 18_000,
+      rentalIncomeRate: 0.02
     };
     const stored = JSON.stringify({
       ...DEFAULT_PLAN_INPUTS,

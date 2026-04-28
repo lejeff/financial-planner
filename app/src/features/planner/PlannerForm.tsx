@@ -1035,6 +1035,15 @@ function RealEstateHoldingCard({
     format: percent
   };
 
+  const rentalRateSpec: SliderSpec = {
+    key: "holdingRentalIncomeRate",
+    label: "Rental income annual appreciation",
+    min: MIN_APPRECIATION,
+    max: MAX_APPRECIATION,
+    step: 0.001,
+    format: percent
+  };
+
   return (
     <fieldset
       className="relative space-y-3 rounded-[1rem] border bg-[var(--surface)] px-3 py-3 md:px-4"
@@ -1055,6 +1064,18 @@ function RealEstateHoldingCard({
         spec={appreciationRateSpec}
         value={holding.appreciationRate}
         onChange={(next) => onChange({ appreciationRate: next })}
+      />
+      <CurrencyField
+        label="Annual rental income"
+        value={holding.annualRentalIncome}
+        onChange={(next) => onChange({ annualRentalIncome: next })}
+        min={0}
+        max={10_000_000}
+      />
+      <SliderRow
+        spec={rentalRateSpec}
+        value={holding.rentalIncomeRate}
+        onChange={(next) => onChange({ rentalIncomeRate: next })}
       />
       <div className="flex justify-end">
         <button

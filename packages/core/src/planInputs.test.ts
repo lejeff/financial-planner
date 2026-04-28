@@ -262,6 +262,30 @@ describe("RealEstateHoldingSchema", () => {
       RealEstateHoldingSchema.parse({ ...valid, appreciationRate: -5 })
     ).toThrow();
   });
+
+  it("rejects a negative annualRentalIncome", () => {
+    expect(() =>
+      RealEstateHoldingSchema.parse({ ...valid, annualRentalIncome: -1 })
+    ).toThrow();
+  });
+
+  it("rejects a non-finite annualRentalIncome", () => {
+    expect(() =>
+      RealEstateHoldingSchema.parse({
+        ...valid,
+        annualRentalIncome: Number.POSITIVE_INFINITY
+      })
+    ).toThrow();
+  });
+
+  it("rejects a rentalIncomeRate outside the global rate bounds", () => {
+    expect(() =>
+      RealEstateHoldingSchema.parse({ ...valid, rentalIncomeRate: 5 })
+    ).toThrow();
+    expect(() =>
+      RealEstateHoldingSchema.parse({ ...valid, rentalIncomeRate: -5 })
+    ).toThrow();
+  });
 });
 
 describe("makeDefaultRealEstateHolding", () => {
@@ -271,10 +295,12 @@ describe("makeDefaultRealEstateHolding", () => {
     expect(a.id).not.toBe(b.id);
   });
 
-  it("defaults value and rate to 0 so a fresh card reads as a blank slate", () => {
+  it("defaults every monetary and rate field to 0 so a fresh card reads as a blank slate", () => {
     const holding = makeDefaultRealEstateHolding();
     expect(holding.value).toBe(0);
     expect(holding.appreciationRate).toBe(0);
+    expect(holding.annualRentalIncome).toBe(0);
+    expect(holding.rentalIncomeRate).toBe(0);
   });
 
   it("uses the realEstateHolding type discriminator", () => {

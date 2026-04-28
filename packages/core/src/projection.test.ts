@@ -69,6 +69,8 @@ function makeHolding(
     type: "realEstateHolding",
     value: 0,
     appreciationRate: 0,
+    annualRentalIncome: 0,
+    rentalIncomeRate: 0,
     ...overrides
   };
 }
@@ -642,6 +644,67 @@ describe("projectNetWorth", () => {
       FIXED_NOW
     );
     for (let i = 1; i <= 5; i += 1) money(points[i].netWorth, 5_000 * i);
+  });
+
+  it("flows per-holding rental into liquid and compounds at the per-holding rate", () => {
+    // Two holdings with independent rental streams: holding A at 10K with
+    // 10% annual growth, holding B at 5K flat. Each year's net worth gain
+    // is the sum of both rentals; we assert the engine sums them rather
+    // than using a single global rental.
+    const points = projectNetWorth(
+      {
+        ...BASE_INPUTS,
+        startAssets: 0,
+        annualIncome: 0,
+        monthlySpending: 0,
+        nominalReturn: 0,
+        rentalIncome: 0,
+        rentalIncomeRate: 0,
+        realEstateHoldings: [
+          makeHolding({
+            value: 0,
+            annualRentalIncome: 10_000,
+            rentalIncomeRate: 0.1
+          }),
+          makeHolding({
+            value: 0,
+            annualRentalIncome: 5_000,
+            rentalIncomeRate: 0
+          })
+        ]
+      },
+      FIXED_NOW
+    );
+    // Year 1: 10K * 1.10 + 5K = 16K
+    money(points[1].netWorth, 16_000);
+    // Year 2: cumulative 16K + (10K * 1.10^2 + 5K) = 16K + 12_100 + 5K = 33_100
+    money(points[2].netWorth, 33_100);
+    // Year 3: cumulative 33_100 + (10K * 1.10^3 + 5K) = 33_100 + 13_310 + 5K = 51_410
+    money(points[3].netWorth, 51_410);
+  });
+
+  it("does not contribute holdings rental when annualRentalIncome is zero", () => {
+    // A holding with 0 rental should look identical (in liquid) to having
+    // no holding at all from a cash-flow perspective. We compare two runs.
+    const withRental = projectNetWorth(
+      {
+        ...BASE_INPUTS,
+        startAssets: 0,
+        annualIncome: 0,
+        monthlySpending: 0,
+        nominalReturn: 0,
+        rentalIncome: 0,
+        rentalIncomeRate: 0,
+        realEstateHoldings: [
+          makeHolding({ value: 200_000, appreciationRate: 0 })
+        ]
+      },
+      FIXED_NOW
+    );
+    for (let i = 0; i <= 5; i += 1) {
+      // Real estate value contributes to netWorth but liquid stays at 0.
+      money(withRental[i].liquid, 0);
+    }
   });
 
   it("deposits the windfall into the investment portfolio on the matching calendar year", () => {

@@ -61,17 +61,25 @@ export const LifeEventSchema = z.discriminatedUnion("type", [
 
 export type LifeEvent = z.infer<typeof LifeEventSchema>;
 
-// A property the user owns today: a value (in today's money) and an annual
-// appreciation rate. Compounds in the projection from year 0; no purchase
-// deduction (these are owned now), no rental income wiring (rental flows
-// belong to RealEstateInvestmentEvent). The form lets the user stack 0..N
-// of these as cards; each carries a stable uuid so edits and removals
-// survive re-renders.
+// A property the user owns today: a value (in today's money), an annual
+// appreciation rate, and an optional rental stream with its own annual
+// growth rate. Compounds in the projection from year 0; no purchase
+// deduction (these are owned now). Rental flows into liquid each year
+// (today's-money input, compounds at `rentalIncomeRate` from year 1 on),
+// matching the wiring on RealEstateInvestmentEvent. The form lets the
+// user stack 0..N of these as cards; each carries a stable uuid so edits
+// and removals survive re-renders.
 export const RealEstateHoldingSchema = z.object({
   id: z.string().min(1),
   type: z.literal("realEstateHolding"),
   value: z.number().finite().nonnegative(),
   appreciationRate: z
+    .number()
+    .finite()
+    .min(MIN_APPRECIATION)
+    .max(MAX_APPRECIATION),
+  annualRentalIncome: z.number().finite().nonnegative(),
+  rentalIncomeRate: z
     .number()
     .finite()
     .min(MIN_APPRECIATION)
@@ -194,8 +202,8 @@ export function makeDefaultRealEstateInvestment(): RealEstateInvestmentEvent {
   };
 }
 
-// Factory for a fresh real-estate holding with both monetary and rate
-// fields zeroed out so a freshly-added card reads as a blank slate the
+// Factory for a fresh real-estate holding with every monetary and rate
+// field zeroed out so a freshly-added card reads as a blank slate the
 // user fills in deliberately. The id is a uuid so it survives reorders
 // and re-renders, mirroring `makeDefaultRealEstateInvestment`.
 export function makeDefaultRealEstateHolding(): RealEstateHolding {
@@ -203,7 +211,9 @@ export function makeDefaultRealEstateHolding(): RealEstateHolding {
     id: crypto.randomUUID(),
     type: "realEstateHolding",
     value: 0,
-    appreciationRate: 0
+    appreciationRate: 0,
+    annualRentalIncome: 0,
+    rentalIncomeRate: 0
   };
 }
 

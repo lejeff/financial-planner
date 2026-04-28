@@ -791,7 +791,7 @@ describe("Real estate holdings", () => {
     ).toBeInTheDocument();
   });
 
-  it("adds a card with Value + Annual appreciation rate when the Add button is clicked", async () => {
+  it("adds a card with Value + appreciation + Annual rental income + rental appreciation when the Add button is clicked", async () => {
     const user = userEvent.setup();
     render(<Host />);
     await expand(/real estate/i);
@@ -801,6 +801,10 @@ describe("Real estate holdings", () => {
     const card = screen.getByTestId("re-holding-card-0");
     expect(within(card).getByLabelText("Value")).toBeInTheDocument();
     expect(within(card).getByText("Annual appreciation rate")).toBeInTheDocument();
+    expect(within(card).getByLabelText("Annual rental income")).toBeInTheDocument();
+    expect(
+      within(card).getByText("Rental income annual appreciation")
+    ).toBeInTheDocument();
   });
 
   it("stacks multiple holding cards independently", async () => {

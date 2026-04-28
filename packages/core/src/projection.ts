@@ -131,16 +131,22 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
   let rental = input.rentalIncome;
 
   // Currently-owned real-estate holdings: each compounds at its own
-  // appreciation rate from year 0. The map keys on holding.id so multiple
-  // holdings stack independently and edits/removals in the form survive
-  // without disturbing the others. No purchase deduction (these are owned
-  // today) and no rental contribution — rental flows belong to the
-  // RealEstateInvestmentEvent variant below.
-  const holdingStates = new Map<string, { value: number; rate: number }>();
+  // appreciation rate from year 0 and contributes its own rental stream
+  // to liquid each year (today's-money input, compounds at the per-holding
+  // `rentalRate` from year 1 on, mirroring how the global rentalIncome
+  // used to behave). The map keys on holding.id so multiple holdings
+  // stack independently and edits/removals in the form survive without
+  // disturbing the others. No purchase deduction (these are owned today).
+  const holdingStates = new Map<
+    string,
+    { value: number; rate: number; rental: number; rentalRate: number }
+  >();
   for (const holding of input.realEstateHoldings) {
     holdingStates.set(holding.id, {
       value: holding.value,
-      rate: holding.appreciationRate
+      rate: holding.appreciationRate,
+      rental: holding.annualRentalIncome,
+      rentalRate: holding.rentalIncomeRate
     });
   }
 
@@ -170,6 +176,7 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
     if (i > 0) {
       for (const state of holdingStates.values()) {
         state.value *= 1 + state.rate;
+        state.rental *= 1 + state.rentalRate;
       }
       rental *= 1 + input.rentalIncomeRate;
 
@@ -230,9 +237,19 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
         }
       }
 
+      let holdingsRental = 0;
+      for (const state of holdingStates.values()) {
+        holdingsRental += state.rental;
+      }
+
       const afterReturn = assets * (1 + input.nominalReturn);
       const netFlow =
-        salaryNominal + rental + reInvestmentRental - spendingNominal - debtCashOut;
+        salaryNominal +
+        rental +
+        holdingsRental +
+        reInvestmentRental -
+        spendingNominal -
+        debtCashOut;
 
       if (netFlow >= 0) {
         assets = afterReturn + netFlow;
