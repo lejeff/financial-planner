@@ -75,6 +75,22 @@ describe("PlannerForm layout", () => {
     expect(debt.tagName).toBe("FIELDSET");
   });
 
+  it("renders the Debt subsection with the coral (debt-lane) accent, distinct from the teal Liquid/Non-Liquid lanes", async () => {
+    // The Debt subsection sits in its own coral lane (ACCENT.debt =
+    // var(--coral)) so liabilities read distinctly from the teal asset
+    // lanes that share the Assets & Debt category. Sister UI: the New
+    // Debt life-event card and its + Add New Debt button (also coral).
+    // Guards against accidental revert to teal — JSDOM preserves the
+    // raw inline style attribute even when it contains color-mix(),
+    // which JSDOM doesn't natively parse.
+    render(<Host />);
+    await expand(/^debt$/i);
+    const debt = screen.getByTestId("subsection-debt");
+    const inlineStyle = debt.getAttribute("style") ?? "";
+    expect(inlineStyle).toContain("var(--coral)");
+    expect(inlineStyle).not.toContain("var(--teal)");
+  });
+
   it("renders only Annual Salary + Recurring monthly expenses in Income & Expenses (rental moved to holdings)", async () => {
     render(<Host />);
     await expand(/income & expenses/i);

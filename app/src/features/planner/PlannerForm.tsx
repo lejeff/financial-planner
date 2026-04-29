@@ -157,7 +157,13 @@ const INCOME_EXPENSE_AMOUNTS: AmountSpec[] = [
 const ACCENT = {
   aboutYou: "var(--navy-soft)",
   assetsDebt: "var(--teal)",
-  incomeExpenses: "var(--coral)",
+  // `debt` is its own lane so the Debt subsection (and the New Debt
+  // life-event card / + Add New Debt button) read as liabilities,
+  // visually distinct from the teal Liquid/Non-Liquid asset lanes.
+  // Coral was previously the Income & Expenses accent, which has now
+  // moved to the new emerald lane.
+  debt: "var(--coral)",
+  incomeExpenses: "var(--emerald)",
   realEstate: "var(--gold)",
   lifeEvents: "var(--violet)",
   macro: "var(--slate)"
@@ -470,7 +476,7 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
 
           <CollapsibleSubsection
             title="Debt"
-            accent={ACCENT.assetsDebt}
+            accent={ACCENT.debt}
             testId="subsection-debt"
           >
             {renderAmounts(DEBT_AMOUNTS)}
@@ -637,7 +643,7 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
                 key={event.id}
                 event={event}
                 index={index}
-                accent={ACCENT.assetsDebt}
+                accent={ACCENT.debt}
                 yearMin={yearSliderMin}
                 yearMax={yearSliderMax}
                 currentYear={currentYear}
@@ -650,7 +656,7 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
               type="button"
               onClick={addNewDebtEvent}
               className="btn-ghost w-full justify-center"
-              style={{ borderColor: ACCENT.assetsDebt, color: ACCENT.assetsDebt }}
+              style={{ borderColor: ACCENT.debt, color: ACCENT.debt }}
             >
               + Add New Debt
             </button>
