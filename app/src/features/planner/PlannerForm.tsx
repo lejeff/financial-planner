@@ -853,9 +853,12 @@ function CollapsiblePill({
   const verticalPadding = open
     ? "py-3 md:py-4"
     : "pb-2 pt-1 md:pb-3 md:pt-1";
-  const fieldsetClass = isLg
+  const baseFieldsetClass = isLg
     ? `relative rounded-[1.25rem] border bg-[var(--surface)] px-4 md:px-5 ${verticalPadding}`
     : `relative rounded-[1rem] border bg-[var(--surface)] px-3 md:px-4 ${verticalPadding}`;
+  const fieldsetClass = open
+    ? baseFieldsetClass
+    : `${baseFieldsetClass} cursor-pointer`;
 
   // Parent pills get a solid accent border; child pills use a softer
   // 50% mix so they read as nested rather than competing with the
@@ -882,6 +885,12 @@ function CollapsiblePill({
     <fieldset
       className={fieldsetClass}
       data-testid={testId}
+      // Click-to-expand: a collapsed pill opens on any click inside its
+      // border. The handler is intentionally `undefined` while open so
+      // bubbled clicks from children (sub-pills, inputs, sliders,
+      // buttons) can never collapse the parent. The legend button and
+      // corner chevron remain the only ways to collapse.
+      onClick={open ? undefined : () => setOpen(true)}
       // Set --accent on the pill container so descendant inputs /
       // sliders pick up the section's accent in the global :focus rules
       // and slider thumb rules (globals.css). Cascading via CSS custom

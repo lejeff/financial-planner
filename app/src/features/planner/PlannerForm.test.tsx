@@ -525,6 +525,68 @@ describe("PlannerForm layout", () => {
     ).toBeNull();
   });
 
+  it("opens a collapsed parent pill when the user clicks anywhere on its body (not just the header button)", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    // Macro defaults closed and renders its inflation summary in the
+    // collapsed body. Click the summary div directly (NOT the legend
+    // button) and assert the pill expanded — proves the click bubbled
+    // up to the fieldset's open-on-click handler.
+    const macroBtn = screen.getByRole("button", { name: /macro assumptions/i });
+    expect(macroBtn).toHaveAttribute("aria-expanded", "false");
+    const summary = screen.getByText(/Inflation 2\.0%/);
+    await user.click(summary);
+    expect(macroBtn).toHaveAttribute("aria-expanded", "true");
+    // Inflation slider's label is now visible inside the expanded body
+    // (the SliderRow label "Inflation" renders next to the value).
+    const macro = screen.getByText("Macro assumptions").closest("fieldset")!;
+    expect(within(macro).getByText("Inflation")).toBeInTheDocument();
+  });
+
+  it("opens a collapsed sub-pill when the user clicks anywhere on its body (summary div, not the header button)", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    // Liquid sub-pill defaults closed inside the (default-open) Assets
+    // and Debt parent. Click the summary div by testid — bypasses the
+    // legend button — and assert the sub-pill expanded.
+    const liquidBtn = screen.getByRole("button", { name: /^Liquid$/i });
+    expect(liquidBtn).toHaveAttribute("aria-expanded", "false");
+    const summary = screen.getByTestId("subsection-liquid-summary");
+    await user.click(summary);
+    expect(liquidBtn).toHaveAttribute("aria-expanded", "true");
+    // Liquid's "Financial Assets / Portfolio" input is now in the DOM.
+    expect(
+      screen.getByLabelText("Financial Assets / Portfolio")
+    ).toBeInTheDocument();
+  });
+
+  it("does NOT collapse an open parent pill (or its open child) when the user clicks inside the parent body", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    // Pre-state: Assets and Debt is open by default; expand Liquid so
+    // we have an open child inside an open parent.
+    await expand(/^Liquid$/i);
+    const parentBtn = screen.getByRole("button", { name: /assets and debt/i });
+    const liquidBtn = screen.getByRole("button", { name: /^Liquid$/i });
+    expect(parentBtn).toHaveAttribute("aria-expanded", "true");
+    expect(liquidBtn).toHaveAttribute("aria-expanded", "true");
+
+    // Click on a non-toggle element inside the open parent: the
+    // Liquid sub-pill's own fieldset (an open pill, so its handler is
+    // undefined) and a label inside it. Both clicks should bubble all
+    // the way up to the parent fieldset without toggling anything,
+    // because each open pill's own onClick is intentionally undefined.
+    const liquidFieldset = screen.getByTestId("subsection-liquid");
+    await user.click(liquidFieldset);
+    expect(parentBtn).toHaveAttribute("aria-expanded", "true");
+    expect(liquidBtn).toHaveAttribute("aria-expanded", "true");
+
+    const portfolioLabel = screen.getByText("Financial Assets / Portfolio");
+    await user.click(portfolioLabel);
+    expect(parentBtn).toHaveAttribute("aria-expanded", "true");
+    expect(liquidBtn).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("shows at-a-glance summaries on each collapsed category", () => {
     render(<Host />);
     // Income & Expenses, Real Estate, Life Events, and Macro assumptions all
