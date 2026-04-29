@@ -5,7 +5,7 @@ Filenames are prefixed with the date the plan was created.
 
 > For the current roadmap of upcoming work, see [`ROADMAP.md`](../../ROADMAP.md) at the repo root.
 
-**29 plans** across 6 days.
+**31 plans** across 6 days.
 
 ## 2026-04-22
 
@@ -53,3 +53,5 @@ Filenames are prefixed with the date the plan was created.
 - [Subsection summaries](./2026-04-29-subsection-summaries.md) — Add collapsed-state summaries to the Liquid, Non-Liquid, and Debt sub-pills inside Assets & Debt. Liquid and Non-Liquid get a single-line total; Debt gets a two-line summary matching the New Debt life-event card format (headline = balance only, no start year, plus the schedule helper line). Extract a shared schedule-text formatter so the in-card paragraph and both collapsed summaries stay in lock-step. Liquid also flips to default-collapsed.
 - [Sub-pill chevron in the top-right](./2026-04-29-sub-pill-chevron-top-right.md) — Move the chevron toggle on every `CollapsibleSubsection` / life-event card from inline-next-to-title to the top-right corner, matching `CollapsibleCategory` exactly. Sub-pills keep the smaller 12px chevron, nudged 1px down so it sits visually centered on the pill border.
 - [Collapsible Real Estate holdings](./2026-04-29-collapsible-real-estate-holdings.md) — Migrate `RealEstateHoldingCard` to render via the shared `CollapsibleSubsection` (`CollapsiblePill`), discarding its hand-rolled `<fieldset>`/`<legend>`/border code. Newly-added holdings auto-expand; loaded ones default collapsed and show a one-line summary combining current value and (when non-zero) annual rental income.
+- [Assets & Debt summary: include expected return](./2026-04-29-assets-debt-return-summary.md) — Append the Expected annual return rate to the Assets & Debt collapsed-pill summary so it reads `Net $X · 5.0% return on Portfolio`, reusing the existing percent formatter and middle-dot separator conventions.
+- [Liquid sub-pill summary: include expected return](./2026-04-29-liquid-subpill-return-summary.md) — Mirror the new "X.X% return on Portfolio" suffix into the Liquid sub-pill's collapsed summary so the rate stays visible when only the Liquid sub-pill is closed (parent pill open). Em-dash kept as the no-balance placeholder; rate always present.
