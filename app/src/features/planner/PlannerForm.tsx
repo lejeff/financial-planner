@@ -587,7 +587,7 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
                 key={event.id}
                 event={event}
                 index={index}
-                accent={ACCENT.lifeEvents}
+                accent={ACCENT.assetsDebt}
                 yearMin={yearSliderMin}
                 yearMax={yearSliderMax}
                 currentYear={currentYear}
@@ -600,7 +600,7 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
               type="button"
               onClick={addWindfallEvent}
               className="btn-ghost w-full justify-center"
-              style={{ borderColor: ACCENT.lifeEvents, color: ACCENT.lifeEvents }}
+              style={{ borderColor: ACCENT.assetsDebt, color: ACCENT.assetsDebt }}
             >
               + Add Windfall
             </button>
@@ -612,7 +612,7 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
                 key={event.id}
                 event={event}
                 index={index}
-                accent={ACCENT.lifeEvents}
+                accent={ACCENT.realEstate}
                 yearMin={yearSliderMin}
                 yearMax={yearSliderMax}
                 currentYear={currentYear}
@@ -625,7 +625,7 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
               type="button"
               onClick={addRealEstateInvestment}
               className="btn-ghost w-full justify-center"
-              style={{ borderColor: ACCENT.lifeEvents, color: ACCENT.lifeEvents }}
+              style={{ borderColor: ACCENT.realEstate, color: ACCENT.realEstate }}
             >
               + Add Real Estate Investment
             </button>
@@ -637,7 +637,7 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
                 key={event.id}
                 event={event}
                 index={index}
-                accent={ACCENT.lifeEvents}
+                accent={ACCENT.assetsDebt}
                 yearMin={yearSliderMin}
                 yearMax={yearSliderMax}
                 currentYear={currentYear}
@@ -650,7 +650,7 @@ export function PlannerForm({ value, onChange, onReset }: Props) {
               type="button"
               onClick={addNewDebtEvent}
               className="btn-ghost w-full justify-center"
-              style={{ borderColor: ACCENT.lifeEvents, color: ACCENT.lifeEvents }}
+              style={{ borderColor: ACCENT.assetsDebt, color: ACCENT.assetsDebt }}
             >
               + Add New Debt
             </button>
