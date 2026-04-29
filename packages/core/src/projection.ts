@@ -221,6 +221,38 @@ export function projectNetWorth(input: PlanInputs, now: Date = new Date()): Proj
     }
   }
 
+  // Year-0 windfall: a windfall with `event.year === startYear` (i.e.
+  // landing today) misses the in-loop apply path for the same reason new
+  // debt does — the body is gated on `i > 0`. Deposit it into liquid
+  // assets here so the year-0 projection point reflects the inflow; the
+  // in-loop handler still picks up any future-year windfalls. No inflator
+  // at year 0 (factor = 1), so the amount lands at face value regardless
+  // of `event.inflateAmount`.
+  for (const event of windfallEvents) {
+    if (event.year === startYear && event.amount > 0) {
+      assets += event.amount;
+    }
+  }
+
+  // Year-0 real estate investment: a purchase with `purchaseYear ===
+  // startYear` (i.e. closing today) misses the in-loop seed + deduction
+  // path for the same reason — the body is gated on `i > 0`. Seed the
+  // per-event value/rental at face value (inflator at year 0 = 1, so face
+  // value regardless of `event.inflateAmount`) and deduct the purchase
+  // amount from liquid assets here so the year-0 projection point reflects
+  // the swap (cash → property). The in-loop handler picks up appreciation,
+  // rental compounding, and rental cash flow from year 1 onward.
+  for (const event of reInvestmentEvents) {
+    if (event.purchaseYear === startYear) {
+      const state = reInvestmentStates.get(event.id)!;
+      state.value = event.purchaseAmount;
+      state.rental = event.annualRentalIncome;
+      if (event.purchaseAmount > 0) {
+        assets -= event.purchaseAmount;
+      }
+    }
+  }
+
   const points: ProjectionPoint[] = [];
 
   for (let i = 0; i <= years; i += 1) {
