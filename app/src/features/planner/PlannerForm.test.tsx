@@ -10,8 +10,14 @@ import {
 } from "@app/core";
 import { CurrencyProvider } from "@/features/currency/CurrencyContext";
 
-function Host({ onReset = vi.fn() }: { onReset?: () => void } = {}) {
-  const [value, setValue] = useState<PlanInputs>(DEFAULT_PLAN_INPUTS);
+function Host({
+  onReset = vi.fn(),
+  initialValue = DEFAULT_PLAN_INPUTS
+}: {
+  onReset?: () => void;
+  initialValue?: PlanInputs;
+} = {}) {
+  const [value, setValue] = useState<PlanInputs>(initialValue);
   return (
     <CurrencyProvider>
       <PlannerForm value={value} onChange={setValue} onReset={onReset} />
@@ -80,16 +86,38 @@ describe("PlannerForm layout", () => {
     expect(debt.tagName).toBe("FIELDSET");
   });
 
-  it("Liquid subsection shows a formatted total (startAssets + cashBalance) in its collapsed-state summary", () => {
+  it("Liquid subsection shows a formatted total (startAssets + cashBalance) plus the expected return rate in its collapsed-state summary", () => {
     render(<Host />);
     // Liquid defaults to closed (matches Non-Liquid + Debt), so the
     // summary is visible immediately. DEFAULT_PLAN_INPUTS has
-    // startAssets=10_000 and cashBalance=0, so the formatted total
-    // should contain "10,000".
+    // startAssets=10_000, cashBalance=0, and nominalReturn=0.05 so the
+    // collapsed summary should pin both the formatted total and the
+    // "X.X% return on Portfolio" suffix (mirrors the parent
+    // Assets and Debt summary so the rate stays visible while the
+    // parent pill is open).
     const summary = screen.getByTestId("subsection-liquid-summary");
     expect(summary.textContent).toMatch(/10,000/);
-    // Sanity-check it's not the em-dash empty fallback.
+    expect(summary.textContent).toMatch(/5\.0% return on Portfolio/);
+    // Sanity-check it's not the em-dash empty fallback alone.
     expect(summary.textContent).not.toBe("—");
+  });
+
+  it("Liquid subsection summary keeps the return rate even when the bucket is empty", () => {
+    render(
+      <Host
+        initialValue={{
+          ...DEFAULT_PLAN_INPUTS,
+          startAssets: 0,
+          cashBalance: 0
+        }}
+      />
+    );
+    // With both Liquid sources zero, the headline collapses to the
+    // em-dash placeholder but the rate must still be appended — same
+    // convention as the parent Assets and Debt pill, which always shows
+    // the rate even when net is 0.
+    const summary = screen.getByTestId("subsection-liquid-summary");
+    expect(summary.textContent).toBe("— · 5.0% return on Portfolio");
   });
 
   it("Non-Liquid subsection shows an em-dash in its collapsed-state summary when both buckets are zero (default fixture)", async () => {
@@ -520,10 +548,32 @@ describe("PlannerForm layout", () => {
     const user = userEvent.setup();
     render(<Host />);
     // Assets and Debt starts open, so its 'Net' summary should not be in the DOM.
-    expect(screen.queryByText(/^Net .{1,3}10K$/)).toBeNull();
-    // Collapse it; the summary should appear in its header row.
+    expect(
+      screen.queryByText(/^Net .{1,3}10K · 5\.0% return on Portfolio$/)
+    ).toBeNull();
+    // Collapse it; the summary should appear in its header row, including
+    // the Expected annual return appended after the net headline.
     await user.click(screen.getByRole("button", { name: /assets and debt/i }));
-    expect(screen.getByText(/^Net .{1,3}10K$/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/^Net .{1,3}10K · 5\.0% return on Portfolio$/)
+    ).toBeInTheDocument();
+  });
+
+  it("updates the Assets and Debt summary when the Expected annual return changes", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    // The Expected annual return slider lives in the Liquid sub-pill, which
+    // starts collapsed. Expand it, bump the slider, then collapse the
+    // parent Assets and Debt pill so the summary line is rendered in its
+    // header. The slider is a native range input with aria-label = its
+    // SliderSpec label ("Expected annual return").
+    await expand(/^Liquid$/i);
+    const slider = screen.getByLabelText("Expected annual return") as HTMLInputElement;
+    fireEvent.change(slider, { target: { value: "0.07" } });
+    await user.click(screen.getByRole("button", { name: /assets and debt/i }));
+    expect(
+      screen.getByText(/^Net .{1,3}10K · 7\.0% return on Portfolio$/)
+    ).toBeInTheDocument();
   });
 
   it("updates the Life Events summary when a windfall amount is entered", async () => {

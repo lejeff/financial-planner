@@ -183,7 +183,7 @@ function summarizeAssetsDebt(
     v.nonLiquidInvestments +
     v.otherFixedAssets -
     v.startDebt;
-  return `Net ${formatCompact(net)}`;
+  return `Net ${formatCompact(net)} · ${percent(v.nominalReturn)} return on Portfolio`;
 }
 
 function summarizeIncomeExpenses(
@@ -211,7 +211,8 @@ function summarizeLiquidSubsection(
   format: (n: number) => string
 ): string {
   const total = v.startAssets + v.cashBalance;
-  return total > 0 ? format(total) : "—";
+  const totalText = total > 0 ? format(total) : "—";
+  return `${totalText} · ${percent(v.nominalReturn)} return on Portfolio`;
 }
 
 function summarizeNonLiquidSubsection(
