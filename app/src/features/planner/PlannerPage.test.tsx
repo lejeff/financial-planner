@@ -83,6 +83,19 @@ describe("PlannerPage", () => {
     expect(numeric).toBe(expected);
   });
 
+  it("wraps the stat-card row in a sticky container from md+ so the headline numbers stay visible while the form scrolls", () => {
+    renderPage();
+    // The wrapper is the parent of the stat-card grid section; we walk
+    // up from any of the three card eyebrows to the nearest md:sticky
+    // container (the grid section itself isn't sticky — its wrapper is).
+    const wrapper = screen.getByText("Net worth today").closest("div.md\\:sticky");
+    expect(wrapper).not.toBeNull();
+    expect(wrapper).toHaveClass("md:top-16");
+    expect(wrapper).toHaveClass("md:z-20");
+    // Mobile keeps the original mb-8 spacing under the (non-sticky) row.
+    expect(wrapper).toHaveClass("mb-8");
+  });
+
   it("renders an em-dash cash-flow footnote when there are no inflows at all", async () => {
     const user = userEvent.setup();
     renderPage();

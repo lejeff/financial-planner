@@ -86,54 +86,62 @@ export function PlannerPage() {
 
   return (
     <main className="mx-auto max-w-6xl px-6 pb-16">
-      <section className="mb-8 grid gap-4 sm:grid-cols-3">
-        <StatCard
-          eyebrow="Net worth today"
-          value={withSymbolSpace(format(netWorthToday))}
-          negative={netWorthToday < 0}
-        />
-        <StatCard
-          eyebrow={
-            <>
-              Net worth at retirement (age {inputs.retirementAge})
-              <br />
-              {basisLabel}
-            </>
-          }
-          value={
-            inputs.retirementAge <= currentAge
-              ? "—"
-              : retirementPoint
-                ? withSymbolSpace(format(retirementPoint.netWorth))
-                : "—"
-          }
-          negative={
-            inputs.retirementAge > currentAge &&
-            retirementPoint != null &&
-            retirementPoint.netWorth < 0
-          }
-          footnote={
-            inputs.retirementAge <= currentAge
-              ? "Already retired"
-              : cashFlowRatio == null
+      {/* Stat-card row sticks under the SiteHeader (h-16, sticky top-0 z-30)
+          from md+ so the headline numbers stay visible while the planner
+          form and charts scroll below. The cream/backdrop-blur background
+          (matching the SiteHeader treatment) keeps the form's white card
+          surface from bleeding through the gap-4 between cards. Mobile
+          keeps the original scroll-through behavior. */}
+      <div className="mb-8 md:sticky md:top-16 md:z-20 md:mb-0 md:bg-[var(--cream)]/85 md:py-4 md:backdrop-blur">
+        <section className="grid gap-4 sm:grid-cols-3">
+          <StatCard
+            eyebrow="Net worth today"
+            value={withSymbolSpace(format(netWorthToday))}
+            negative={netWorthToday < 0}
+          />
+          <StatCard
+            eyebrow={
+              <>
+                Net worth at retirement (age {inputs.retirementAge})
+                <br />
+                {basisLabel}
+              </>
+            }
+            value={
+              inputs.retirementAge <= currentAge
                 ? "—"
-                : `Saving ${(cashFlowRatio * 100).toFixed(0)}% of cash flow`
-          }
-        />
-        <StatCard
-          eyebrow={
-            <>
-              Projected net worth at age {endAge}
-              <br />
-              {basisLabel}
-            </>
-          }
-          value={finalNetWorthLabel}
-          accent={netWorthTrend === "up" ? "teal" : "coral"}
-          negative={finalPoint != null && finalPoint.netWorth < 0}
-          footnote={realCAGR == null ? "—" : `Real CAGR ${(realCAGR * 100).toFixed(1)}%`}
-        />
-      </section>
+                : retirementPoint
+                  ? withSymbolSpace(format(retirementPoint.netWorth))
+                  : "—"
+            }
+            negative={
+              inputs.retirementAge > currentAge &&
+              retirementPoint != null &&
+              retirementPoint.netWorth < 0
+            }
+            footnote={
+              inputs.retirementAge <= currentAge
+                ? "Already retired"
+                : cashFlowRatio == null
+                  ? "—"
+                  : `Saving ${(cashFlowRatio * 100).toFixed(0)}% of cash flow`
+            }
+          />
+          <StatCard
+            eyebrow={
+              <>
+                Projected net worth at age {endAge}
+                <br />
+                {basisLabel}
+              </>
+            }
+            value={finalNetWorthLabel}
+            accent={netWorthTrend === "up" ? "teal" : "coral"}
+            negative={finalPoint != null && finalPoint.netWorth < 0}
+            footnote={realCAGR == null ? "—" : `Real CAGR ${(realCAGR * 100).toFixed(1)}%`}
+          />
+        </section>
+      </div>
 
       <section className="grid gap-6 lg:grid-cols-[minmax(0,400px)_1fr] lg:items-start lg:min-h-[200vh]">
         <div className="card p-6 md:p-7">
@@ -143,7 +151,10 @@ export function PlannerPage() {
             onReset={() => setInputs(DEFAULT_PLAN_INPUTS)}
           />
         </div>
-        <div className="space-y-6 lg:sticky lg:top-20 lg:self-start">
+        {/* Charts column stacks BELOW the sticky stat band on lg+: top-16
+            (header) + ~py-4 + ~140px stat row + ~py-4 ≈ 236px → 15rem
+            (240px) leaves a few px of breathing room. */}
+        <div className="space-y-6 lg:sticky lg:top-[15rem] lg:self-start">
           <div className="card p-6 md:p-7">
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-display text-xl text-[var(--navy)]">Projected net worth</h2>
