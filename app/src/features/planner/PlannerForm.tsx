@@ -753,29 +753,36 @@ function CollapsibleSubsection({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const panelId = useId();
+  // Visual parity with the life-event cards: full-pill border around the
+  // subsection with the title (+ a chevron toggle) sitting in the corner
+  // legend slot. The toggle is a button inside the legend so its
+  // accessible name is the title — existing tests that expand subsections
+  // by clicking `getByRole("button", { name: /title/i })` keep working.
   return (
-    <div
-      className="space-y-4 border-l pl-3"
+    <fieldset
+      className="relative rounded-[1rem] border bg-[var(--surface)] px-3 py-3 md:px-4"
       data-testid={testId}
-      style={{ borderColor: `color-mix(in oklab, ${accent} 40%, transparent)` }}
+      style={{ borderColor: `color-mix(in oklab, ${accent} 50%, transparent)` }}
     >
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        aria-controls={panelId}
-        className="flex w-full items-center justify-between gap-3 text-[13px] font-medium"
-        style={{ color: accent }}
-      >
-        <span>{title}</span>
-        <Chevron open={open} small />
-      </button>
+      <legend className="px-1 text-[12px] font-semibold" style={{ color: accent }}>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-controls={panelId}
+          className="flex items-center gap-1.5"
+          style={{ color: accent }}
+        >
+          <span>{title}</span>
+          <Chevron open={open} small />
+        </button>
+      </legend>
       {open ? (
-        <div id={panelId} className="space-y-3">
+        <div id={panelId} className="space-y-3 pt-1">
           {children}
         </div>
       ) : null}
-    </div>
+    </fieldset>
   );
 }
 

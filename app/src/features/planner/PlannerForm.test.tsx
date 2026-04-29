@@ -67,6 +67,12 @@ describe("PlannerForm layout", () => {
     // The subsection header and the field label both read "Debt"; rely on the
     // testid to scope to the subsection and the input's accessible name inside.
     expect(within(debt).getByLabelText("Debt")).toBeInTheDocument();
+
+    // Assets & Debt subsections render as full-pill fieldsets matching the
+    // life-event card visual (Task 5). Sanity-check each wrapper element.
+    expect(liquid.tagName).toBe("FIELDSET");
+    expect(nonLiquid.tagName).toBe("FIELDSET");
+    expect(debt.tagName).toBe("FIELDSET");
   });
 
   it("renders only Annual Salary + Recurring monthly expenses in Income & Expenses (rental moved to holdings)", async () => {
