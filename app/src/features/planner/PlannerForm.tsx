@@ -704,7 +704,12 @@ function CollapsibleCategory({
       className={`relative rounded-[1.25rem] border bg-[var(--surface)] px-4 md:px-5 ${
         open ? "py-3 md:py-4" : "pb-2 pt-1 md:pb-3 md:pt-1"
       }`}
-      style={{ borderColor: accent }}
+      // Set --accent on the section container so descendant inputs /
+      // sliders pick up the section's accent in the global :focus rules
+      // and slider thumb rules (globals.css). Cascading via CSS custom
+      // property keeps the focus highlight context-aware without each
+      // input needing to know which section it lives in.
+      style={{ borderColor: accent, ["--accent" as string]: accent } as React.CSSProperties}
     >
       <legend className="px-1">
         <button
@@ -768,7 +773,10 @@ function CollapsibleSubsection({
     <fieldset
       className="relative rounded-[1rem] border bg-[var(--surface)] px-3 py-3 md:px-4"
       data-testid={testId}
-      style={{ borderColor: `color-mix(in oklab, ${accent} 50%, transparent)` }}
+      style={{
+        borderColor: `color-mix(in oklab, ${accent} 50%, transparent)`,
+        ["--accent" as string]: accent
+      } as React.CSSProperties}
     >
       <legend className="px-1 text-[12px] font-semibold" style={{ color: accent }}>
         <button
@@ -939,7 +947,10 @@ function RealEstateInvestmentCard({
   return (
     <fieldset
       className="relative space-y-3 rounded-[1rem] border bg-[var(--surface)] px-3 py-3 md:px-4"
-      style={{ borderColor: `color-mix(in oklab, ${accent} 50%, transparent)` }}
+      style={{
+        borderColor: `color-mix(in oklab, ${accent} 50%, transparent)`,
+        ["--accent" as string]: accent
+      } as React.CSSProperties}
       data-testid={`re-investment-card-${index}`}
     >
       <legend className="px-1 text-[12px] font-semibold" style={{ color: accent }}>
@@ -1046,7 +1057,10 @@ function WindfallEventCard({
   return (
     <fieldset
       className="relative space-y-3 rounded-[1rem] border bg-[var(--surface)] px-3 py-3 md:px-4"
-      style={{ borderColor: `color-mix(in oklab, ${accent} 50%, transparent)` }}
+      style={{
+        borderColor: `color-mix(in oklab, ${accent} 50%, transparent)`,
+        ["--accent" as string]: accent
+      } as React.CSSProperties}
       data-testid={`windfall-card-${index}`}
     >
       <legend className="px-1 text-[12px] font-semibold" style={{ color: accent }}>
@@ -1157,7 +1171,10 @@ function NewDebtEventCard({
   return (
     <fieldset
       className="relative space-y-3 rounded-[1rem] border bg-[var(--surface)] px-3 py-3 md:px-4"
-      style={{ borderColor: `color-mix(in oklab, ${accent} 50%, transparent)` }}
+      style={{
+        borderColor: `color-mix(in oklab, ${accent} 50%, transparent)`,
+        ["--accent" as string]: accent
+      } as React.CSSProperties}
       data-testid={`new-debt-card-${index}`}
     >
       <legend className="px-1 text-[12px] font-semibold" style={{ color: accent }}>
@@ -1321,7 +1338,10 @@ function RealEstateHoldingCard({
   return (
     <fieldset
       className="relative space-y-3 rounded-[1rem] border bg-[var(--surface)] px-3 py-3 md:px-4"
-      style={{ borderColor: `color-mix(in oklab, ${accent} 50%, transparent)` }}
+      style={{
+        borderColor: `color-mix(in oklab, ${accent} 50%, transparent)`,
+        ["--accent" as string]: accent
+      } as React.CSSProperties}
       data-testid={`re-holding-card-${index}`}
     >
       <legend className="px-1 text-[12px] font-semibold" style={{ color: accent }}>
