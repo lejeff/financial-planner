@@ -399,6 +399,19 @@ variant carries a stable `id` (uuid) so the form can edit/remove a specific
 entry across renders. There are three variants today; new variants drop in by
 adding another schema to `LifeEventSchema` in `packages/core/src/planInputs.ts`.
 
+**Year-0 convention.** The projection loop's body is gated on `i > 0`: year 0
+is reserved for setup (initial balances are captured, no inflator, no salary
+or expense flows, no annual debt service). Any lump event whose landing year
+equals the projection's `startYear` (`year`/`purchaseYear`/`startYear` for
+windfall, RE investment, and new debt respectively) is therefore handled by
+a parallel year-0 pre-loop block in `projectNetWorth`. Those blocks land the
+amount at face value (inflator at year 0 = 1, so `inflateAmount` has no
+effect) and do the corresponding cash swap (deposit to liquid for windfall
+and new-debt principal; cash → property bucket for RE investment). The
+in-loop handler then picks up everything from year 1 onward — appreciation,
+rental compounding, and amortization — without ever re-applying the year-0
+landing.
+
 ##### `RealEstateInvestmentEvent` (`type: "realEstateInvestment"`)
 
 A future property purchase: at `purchaseYear` the engine deducts
@@ -408,7 +421,12 @@ property bucket and rental stream, then compounds both at the per-event
 rates each subsequent year. Behaves like a `RealEstateHolding` but starts
 in the future and is funded from liquid assets. When `inflateAmount` is
 false, the entered `purchaseAmount` and `annualRentalIncome` are treated
-as nominal future-year values and land at face value.
+as nominal future-year values and land at face value. A `purchaseYear ===
+currentYear` purchase is handled by the year-0 pre-loop block (see the
+year-0 convention note above): the property bucket and rental are seeded
+at face value and the purchase is deducted from liquid in year 0; the
+in-loop compound branch picks up appreciation and rental compounding from
+year 1 onward.
 
 | Field | Type | Units | Constraints |
 | --- | --- | --- | --- |
@@ -429,7 +447,9 @@ it to the landing year (same convention as
 `RealEstateInvestmentEvent.purchaseAmount`); when `inflateAmount` is false,
 the entered `amount` lands at face value. Multiple windfall events stack
 independently; each fires once when its `year` matches the projection's
-calendar year.
+calendar year. A `year === currentYear` deposit is handled by the year-0
+pre-loop block (see the year-0 convention note above) and lands at face
+value regardless of `inflateAmount`.
 
 | Field | Type | Units | Constraints |
 | --- | --- | --- | --- |

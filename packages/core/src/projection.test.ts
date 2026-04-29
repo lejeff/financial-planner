@@ -834,6 +834,35 @@ describe("projectNetWorth", () => {
     expect(points[6].netWorth).toBe(125_000);
   });
 
+  // Regression: a windfall whose `year === startYear` (i.e. landing today)
+  // used to be silently dropped because the in-loop apply path was gated on
+  // `i > 0`. The pre-loop year-0 block now lands it at face value (inflator
+  // at year 0 = 1) and subsequent years compound off the post-windfall
+  // principal — never re-applying.
+  it("lands a windfall scheduled for the current year (year 0) at face value", () => {
+    const points = projectNetWorth(
+      {
+        ...BASE_INPUTS,
+        startAssets: 0,
+        cashBalance: 0,
+        annualIncome: 0,
+        monthlySpending: 0,
+        nominalReturn: 0.1,
+        inflationRate: 0.05,
+        events: [
+          makeWindfallEvent({
+            amount: 100_000,
+            year: FIXED_NOW.getFullYear()
+          })
+        ]
+      },
+      FIXED_NOW
+    );
+    money(points[0].netWorth, 100_000);
+    money(points[1].netWorth, 110_000);
+    money(points[2].netWorth, 121_000);
+  });
+
   it("excludes per-holding rental from direct year-0 net-worth contribution", () => {
     // Rental flows belong in netFlow (year 1+); year 0 should reflect only
     // start balances. A holding with high rental but zero value should not
@@ -1677,6 +1706,33 @@ describe("real estate investment events", () => {
     money(points[1].liquid, 1_000_000 + 10_000);
     money(points[2].liquid, 1_000_000 + 10_000 + 10_000 * 1.1);
     money(points[3].liquid, 1_000_000 + 10_000 + 10_000 * 1.1 + 10_000 * 1.1 ** 2);
+  });
+
+  // Regression: a purchase whose `purchaseYear === startYear` (i.e. closing
+  // today) used to be silently dropped because both the seed/compound block
+  // and the deduction block were gated on `i > 0`. The pre-loop year-0 block
+  // now seeds the property bucket at face value and deducts the purchase
+  // from liquid in year 0 (cash → property swap, net worth unchanged), then
+  // year 1 picks up appreciation from the in-loop compound branch.
+  it("seeds a year-0 purchase (purchaseYear === startYear) and deducts from liquid immediately", () => {
+    const event = makeReEvent({
+      purchaseAmount: 200_000,
+      purchaseYear: startYear,
+      appreciationRate: 0.05,
+      annualRentalIncome: 0,
+      rentalIncomeRate: 0
+    });
+    const points = projectNetWorth({ ...quietBase, events: [event] }, FIXED_NOW);
+    // Year 0: liquid drops by purchase amount, real-estate bucket holds it.
+    // Net worth is unchanged from baseline since no rate has compounded yet.
+    money(points[0].liquid, 1_000_000 - 200_000);
+    money(points[0].realEstate, 200_000);
+    money(points[0].netWorth, 1_000_000);
+    // Year 1+: in-loop compound branch kicks in (`startYear + 1 > startYear`).
+    money(points[1].realEstate, 200_000 * 1.05);
+    money(points[1].liquid, 1_000_000 - 200_000);
+    money(points[1].netWorth, 1_000_000 - 200_000 + 200_000 * 1.05);
+    money(points[5].realEstate, 200_000 * 1.05 ** 5);
   });
 
   it("inflates today's-money inputs to the landing year (windfall convention)", () => {
