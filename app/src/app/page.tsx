@@ -1,21 +1,30 @@
-import { SiteHeader } from "@/components/SiteHeader";
-import { SiteFooter } from "@/components/SiteFooter";
-import { PlannerPage } from "@/features/planner/PlannerPage";
+import type { Metadata } from "next";
+import { LandingHeader } from "@/components/landing/LandingHeader";
+import { LandingHero } from "@/components/landing/LandingHero";
+import { FeatureShowcase } from "@/components/landing/FeatureShowcase";
+import { FeatureGrid } from "@/components/landing/FeatureGrid";
+import { Pricing } from "@/components/landing/Pricing";
+import { FinalCTA } from "@/components/landing/FinalCTA";
+import { LandingFooter } from "@/components/landing/LandingFooter";
 
-export default function Home() {
+export const metadata: Metadata = {
+  title: "Financial Planner — Plan Your Financial Future with Confidence",
+  description:
+    "Simulate your financial future and chart a course toward your best life. Interactive retirement projections with no account required — your data stays on your device."
+};
+
+export default function LandingPage() {
   return (
     <>
-      <SiteHeader />
-      <main className="flex-1">
-        {/* #planner anchor is still targeted by the SiteHeader nav and
-            "Start planning" CTA, plus the SiteFooter's Planner link.
-            scroll-mt-20 keeps anchor jumps from tucking the stat cards
-            under the sticky header. */}
-        <div id="planner" className="scroll-mt-20">
-          <PlannerPage />
-        </div>
+      <LandingHeader />
+      <main>
+        <LandingHero />
+        <FeatureShowcase />
+        <FeatureGrid />
+        <Pricing />
+        <FinalCTA />
       </main>
-      <SiteFooter />
+      <LandingFooter />
     </>
   );
 }

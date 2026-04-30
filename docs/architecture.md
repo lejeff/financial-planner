@@ -110,8 +110,8 @@ Vercel auto-deploys `main` to production and every pull request to a preview URL
 
 App Router layout, Client + Server Components, server actions, and a handful of API routes:
 
-- [`app/src/app/page.tsx`](../app/src/app/page.tsx) — landing + planner UI
-- [`app/src/app/landing/page.tsx`](../app/src/app/landing/page.tsx) — work-in-progress marketing landing preview at `/landing` (`robots: noindex, nofollow`); reachable from a discreet "Landing preview" link in `SiteFooter`
+- [`app/src/app/page.tsx`](../app/src/app/page.tsx) — public marketing landing page at `/` (`LandingHeader` + hero + feature showcase + feature grid + pricing + final CTA + `LandingFooter`); every CTA targets `/planner`
+- [`app/src/app/planner/page.tsx`](../app/src/app/planner/page.tsx) — interactive planner UI at `/planner` (`SiteHeader` + sticky stat-card band + `PlannerForm` + projection charts + `SiteFooter`); the SiteHeader brand link returns to `/`
 - [`app/src/app/api/billing/checkout/route.ts`](../app/src/app/api/billing/checkout/route.ts) — creates a Stripe Checkout session
 - [`app/src/app/api/webhooks/stripe/route.ts`](../app/src/app/api/webhooks/stripe/route.ts) — receives Stripe webhook events
 - [`app/src/app/global-error.tsx`](../app/src/app/global-error.tsx) — top-level error boundary that reports to Sentry

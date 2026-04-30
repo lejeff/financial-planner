@@ -27,7 +27,7 @@ export function FinalCTA() {
         
         <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link
-            href="/"
+            href="/planner"
             className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-[var(--coral)] text-white font-semibold text-lg shadow-lg shadow-[var(--coral)]/30 hover:bg-[#ff6a45] hover:shadow-xl hover:shadow-[var(--coral)]/40 transition-all hover:-translate-y-0.5"
           >
             Get started free
