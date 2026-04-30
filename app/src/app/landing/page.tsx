@@ -3,6 +3,7 @@ import { LandingHeader } from "@/components/landing/LandingHeader";
 import { LandingHero } from "@/components/landing/LandingHero";
 import { FeatureShowcase } from "@/components/landing/FeatureShowcase";
 import { FeatureGrid } from "@/components/landing/FeatureGrid";
+import { Pricing } from "@/components/landing/Pricing";
 import { Testimonials } from "@/components/landing/Testimonials";
 import { FinalCTA } from "@/components/landing/FinalCTA";
 import { LandingFooter } from "@/components/landing/LandingFooter";
@@ -22,6 +23,7 @@ export default function LandingPage() {
         <LandingHero />
         <FeatureShowcase />
         <FeatureGrid />
+        <Pricing />
         <Testimonials />
         <FinalCTA />
       </main>
