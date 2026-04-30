@@ -5,7 +5,7 @@ Filenames are prefixed with the date the plan was created.
 
 > For the current roadmap of upcoming work, see [`ROADMAP.md`](../../ROADMAP.md) at the repo root.
 
-**32 plans** across 6 days.
+**33 plans** across 7 days.
 
 ## 2026-04-22
 
@@ -56,3 +56,7 @@ Filenames are prefixed with the date the plan was created.
 - [Assets & Debt summary: include expected return](./2026-04-29-assets-debt-return-summary.md) — Append the Expected annual return rate to the Assets & Debt collapsed-pill summary so it reads `Net $X · 5.0% return on Portfolio`, reusing the existing percent formatter and middle-dot separator conventions.
 - [Liquid sub-pill summary: include expected return](./2026-04-29-liquid-subpill-return-summary.md) — Mirror the new "X.X% return on Portfolio" suffix into the Liquid sub-pill's collapsed summary so the rate stays visible when only the Liquid sub-pill is closed (parent pill open). Em-dash kept as the no-balance placeholder; rate always present.
 - [Click-to-expand pill](./2026-04-29-click-to-expand-pill.md) — Make clicking anywhere on a collapsed pill (parent category, sub-pill, life-event card, or Real Estate holding) open it. One-way: clicks inside an open pill never collapse it, so nested children retain their independent open/closed state and clicks bubbling up from inputs / sliders / sub-pills never accidentally close the parent.
+
+## 2026-04-30
+
+- [Dual-handle range slider for New Debt loan period](./2026-04-30-new-debt-range-slider.md) — Replace the two single-handle Start year + Loan end year sliders on the New Debt life-event card with one dual-thumb range slider built on `@radix-ui/react-slider`. Two helper lines below the slider preserve the existing principal preview, relative-year text, and inFine label swap. Radix enforces `start <= end` natively; schema in `@app/core` is unchanged so legacy data still loads. First third-party UI primitive in the codebase.
