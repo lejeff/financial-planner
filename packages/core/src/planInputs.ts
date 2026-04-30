@@ -22,6 +22,11 @@ export type DebtRepaymentType = (typeof DEBT_REPAYMENT_TYPES)[number];
 export const RealEstateInvestmentEventSchema = z.object({
   id: z.string().min(1),
   type: z.literal("realEstateInvestment"),
+  // User-customizable display label for the card legend. Empty string
+  // means "use the auto-numbered default" (e.g. `Real Estate Investment 1`)
+  // computed by the form. Stored on the schema so custom names round-trip
+  // through localStorage. Default `""` keeps legacy stored events working.
+  label: z.string().default(""),
   purchaseAmount: z.number().finite().nonnegative(),
   purchaseYear: z.number().int(),
   appreciationRate: z
@@ -56,6 +61,11 @@ export type RealEstateInvestmentEvent = z.infer<
 export const WindfallEventSchema = z.object({
   id: z.string().min(1),
   type: z.literal("windfall"),
+  // User-customizable display label for the card legend. Empty string
+  // means "use the auto-numbered default" (e.g. `Windfall 1`) computed
+  // by the form. Stored on the schema so custom names round-trip through
+  // localStorage. Default `""` keeps legacy stored events working.
+  label: z.string().default(""),
   amount: z.number().finite().nonnegative(),
   year: z.number().int(),
   // When true, the today's-money `amount` is inflated to the landing year
@@ -79,6 +89,11 @@ export type WindfallEvent = z.infer<typeof WindfallEventSchema>;
 export const NewDebtEventSchema = z.object({
   id: z.string().min(1),
   type: z.literal("newDebt"),
+  // User-customizable display label for the card legend. Empty string
+  // means "use the auto-numbered default" (e.g. `New Debt 1`) computed
+  // by the form. Stored on the schema so custom names round-trip through
+  // localStorage. Default `""` keeps legacy stored events working.
+  label: z.string().default(""),
   principal: z.number().finite().nonnegative(),
   interestRate: z
     .number()
@@ -118,6 +133,11 @@ export type LifeEvent = z.infer<typeof LifeEventSchema>;
 export const RealEstateHoldingSchema = z.object({
   id: z.string().min(1),
   type: z.literal("realEstateHolding"),
+  // User-customizable display label for the card legend. Empty string
+  // means "use the auto-numbered default" (e.g. `Real Estate 1`) computed
+  // by the form. Stored on the schema so custom names round-trip through
+  // localStorage. Default `""` keeps legacy stored holdings working.
+  label: z.string().default(""),
   value: z.number().finite().nonnegative(),
   appreciationRate: z
     .number()
@@ -236,6 +256,7 @@ export function makeDefaultRealEstateInvestment(): RealEstateInvestmentEvent {
   return {
     id: crypto.randomUUID(),
     type: "realEstateInvestment",
+    label: "",
     purchaseAmount: 0,
     purchaseYear: new Date().getFullYear() + 5,
     appreciationRate: 0,
@@ -253,6 +274,7 @@ export function makeDefaultRealEstateHolding(): RealEstateHolding {
   return {
     id: crypto.randomUUID(),
     type: "realEstateHolding",
+    label: "",
     value: 0,
     appreciationRate: 0,
     annualRentalIncome: 0,
@@ -268,6 +290,7 @@ export function makeDefaultWindfallEvent(): WindfallEvent {
   return {
     id: crypto.randomUUID(),
     type: "windfall",
+    label: "",
     amount: 0,
     year: new Date().getFullYear() + 5,
     inflateAmount: true
@@ -285,6 +308,7 @@ export function makeDefaultNewDebtEvent(): NewDebtEvent {
   return {
     id: crypto.randomUUID(),
     type: "newDebt",
+    label: "",
     principal: 0,
     interestRate: DEFAULT_RATE,
     repaymentType: "overTime",

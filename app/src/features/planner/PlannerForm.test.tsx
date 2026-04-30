@@ -6,6 +6,7 @@ import { PlannerForm } from "./PlannerForm";
 import {
   DEFAULT_PLAN_INPUTS,
   makeDefaultRealEstateHolding,
+  makeDefaultRealEstateInvestment,
   type PlanInputs
 } from "@app/core";
 import { CurrencyProvider } from "@/features/currency/CurrencyContext";
@@ -292,32 +293,39 @@ describe("PlannerForm layout", () => {
     );
     const card = screen.getByTestId("windfall-card-0");
 
-    // The sub-pill should expose two buttons that toggle: the legend
-    // button (carrying the title as accessible name) and a decorative
-    // top-right chevron button (aria-hidden + tabIndex=-1). The legend
-    // button has NO chevron sibling inside it anymore.
-    const legendButton = within(card).getByRole("button", {
-      name: /^Windfall 1$/i
+    // After the editable-label refactor, per-card pills (Windfall and
+    // siblings) render the title as an `<input>` in the legend instead
+    // of a `<button>`. The toggle accessibility moves to the corner
+    // chevron, which becomes a real focusable button labeled
+    // `Expand <label>` / `Collapse <label>`. The legend has no chevron
+    // sibling inside it — the chevron sits in the top-right corner of
+    // the fieldset, mirroring the parent-pill positioning pattern
+    // (`absolute right-3 top-[-9px|-10px]`). Sub-pills are nudged 1px
+    // down (top-[-9px]) so the smaller chevron sits visually centered
+    // on the pill's top border; parent pills use top-[-10px] for the
+    // larger chevron.
+    const labelInput = within(card).getByRole("textbox", {
+      name: /Edit label, defaults to "Windfall 1"/i
     });
-    expect(legendButton.querySelector("svg")).toBeNull();
-
-    // The top-right chevron is aria-hidden and intentionally NOT
-    // discoverable via getByRole; query the DOM directly. It must
-    // contain the chevron SVG and use the same top-right positioning
-    // pattern as the parent pill (`absolute right-3 top-[-9px|-10px]`).
-    // Sub-pills are nudged 1px down (top-[-9px]) so the smaller chevron
-    // sits visually centered on the pill's top border; parent pills use
-    // top-[-10px] for the larger chevron.
-    const decorativeButtons = Array.from(
-      card.querySelectorAll('button[aria-hidden="true"]')
-    );
-    expect(decorativeButtons).toHaveLength(1);
-    const chevronButton = decorativeButtons[0]!;
+    // Newly-added cards mount EXPANDED (newlyAddedIds), so the chevron
+    // aria-label reads `Collapse Windfall 1`. The legend contains the
+    // pencil-edit SVG but NOT the chevron triangle — the chevron sits
+    // outside the legend in the top-right corner of the fieldset.
+    expect(labelInput.closest("legend")?.querySelector("svg")).not.toBeNull();
+    const chevronButton = within(card).getByRole("button", {
+      name: /^Collapse Windfall 1$/i
+    });
     expect(chevronButton.className).toContain("absolute");
     expect(chevronButton.className).toContain("right-3");
     expect(chevronButton.className).toContain("top-[-9px]");
-    expect(chevronButton.getAttribute("tabIndex")).toBe("-1");
+    expect(chevronButton.getAttribute("aria-expanded")).toBe("true");
     expect(chevronButton.querySelector("svg")).not.toBeNull();
+    // Chevron is a real toggle button (NOT aria-hidden, NOT tabIndex=-1)
+    // because the legend input replaced the previous keyboard-toggle
+    // button — the chevron is now the only kbd/SR way to open/close
+    // the card.
+    expect(chevronButton.getAttribute("aria-hidden")).toBeNull();
+    expect(chevronButton.getAttribute("tabIndex")).toBe("0");
   });
 
   it("auto-expands a freshly-added life-event card and shows a one-line summary on collapsed cards", async () => {
@@ -339,13 +347,13 @@ describe("PlannerForm layout", () => {
       within(card).queryByTestId("windfall-card-0-summary")
     ).toBeNull();
 
-    // Collapse the card via its legend toggle. Fields disappear and a
-    // single-line summary appears in their place. Default amount is 0,
-    // so the summary falls back to "Year <year>" rather than "€0 in ...".
-    // Match exactly "Windfall 1" (anchored) so we don't catch the
-    // sibling "Remove windfall 1" button.
+    // Collapse the card via its corner chevron toggle (the only
+    // toggle button on per-card pills since the legend became an
+    // editable label input). Fields disappear and a single-line
+    // summary appears in their place. Default amount is 0, so the
+    // summary falls back to "Year <year>" rather than "€0 in ...".
     await user.click(
-      within(card).getByRole("button", { name: /^Windfall 1$/i })
+      within(card).getByRole("button", { name: /^Collapse Windfall 1$/i })
     );
     expect(within(card).queryByLabelText("Amount")).toBeNull();
     const summary = within(card).getByTestId("windfall-card-0-summary");
@@ -1295,10 +1303,13 @@ describe("Real estate holdings", () => {
     await user.type(rentField, "12000");
     await user.tab();
 
-    // Collapse via the legend toggle. Anchor the regex to "Real Estate 1"
-    // so we don't catch the sibling Remove button or the parent category
-    // header.
-    await user.click(within(card).getByRole("button", { name: /^Real Estate 1$/i }));
+    // Collapse via the corner chevron (the only toggle button on per-
+    // card pills since the legend became an editable label input).
+    // Anchor on the chevron's aria-label so we don't catch the
+    // sibling Remove button or the parent category header.
+    await user.click(
+      within(card).getByRole("button", { name: /^Collapse Real Estate 1$/i })
+    );
     expect(within(card).queryByLabelText("Value")).toBeNull();
     const summary = within(card).getByTestId("re-holding-card-0-summary");
     // Post V2-C the value and label render as separate spans with
@@ -1307,9 +1318,13 @@ describe("Real estate holdings", () => {
     expect(summary.textContent).toMatch(/450,000/);
     expect(summary.textContent).toMatch(/12,000 rent\/yr/);
 
-    // Re-expand to confirm the toggle round-trips and the fields return
-    // with the values we typed in still preserved.
-    await user.click(within(card).getByRole("button", { name: /^Real Estate 1$/i }));
+    // Re-expand via the chevron — its aria-label flips to
+    // `Expand Real Estate 1` while collapsed. Confirms the toggle
+    // round-trips and the fields return with the values we typed in
+    // still preserved.
+    await user.click(
+      within(card).getByRole("button", { name: /^Expand Real Estate 1$/i })
+    );
     const reopenedValue = within(card).getByLabelText("Value") as HTMLInputElement;
     expect(reopenedValue.value).toBe("450,000");
   });
@@ -1557,10 +1572,12 @@ describe("New debt events", () => {
     ).textContent!;
     expect(inCardSchedule).toMatch(/Annual repayment/);
 
-    // Collapse via the legend toggle (anchored regex to avoid catching
-    // the sibling "Remove new debt 1" button).
+    // Collapse via the corner chevron (the only toggle button on per-
+    // card pills since the legend became an editable label input).
+    // Anchor on the chevron's aria-label to avoid catching the sibling
+    // "Remove new debt 1" button.
     await user.click(
-      within(card).getByRole("button", { name: /^New Debt 1$/i })
+      within(card).getByRole("button", { name: /^Collapse New Debt 1$/i })
     );
 
     // Post V2-C the summary is one flex container with a value span +
@@ -1600,9 +1617,9 @@ describe("New debt events", () => {
     await user.click(toggle);
     expect(toggle.checked).toBe(false);
 
-    // Collapse and inspect the headline.
+    // Collapse via the corner chevron and inspect the headline.
     await user.click(
-      within(card).getByRole("button", { name: /^New Debt 1$/i })
+      within(card).getByRole("button", { name: /^Collapse New Debt 1$/i })
     );
     // Post V2-C the summary flattens to a single string joined by
     // SUMMARY_SEP; the headline now shows the raw entered amount
@@ -1792,5 +1809,200 @@ describe("inflateAmount toggle", () => {
     ).textContent!;
     expect(summaryAfter).toMatch(/Annual repayment/i);
     expect(summaryAfter).not.toBe(summaryBefore);
+  });
+});
+
+describe("Card label customization", () => {
+  // Every stackable per-card pill (Windfall, Real Estate Investment,
+  // New Debt, Real Estate Holding) renders an editable text input in
+  // its legend instead of the static toggle button. The input shows
+  // the auto-numbered default ("Windfall 1", etc.) as a placeholder
+  // when the stored `label` is empty, so freshly-added cards keep
+  // their identity. Typing into the input updates `event.label` /
+  // `holding.label`; clearing it restores the placeholder. Toggle
+  // accessibility moves to the corner chevron, which the
+  // architectural test elsewhere already verifies.
+
+  it("renders the auto-numbered default as the input placeholder on a freshly-added Windfall", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    await user.click(screen.getByRole("button", { name: /^\+ add windfall$/i }));
+    const card = screen.getByTestId("windfall-card-0");
+    const input = within(card).getByRole("textbox", {
+      name: /Edit label, defaults to "Windfall 1"/i
+    }) as HTMLInputElement;
+    // Empty value, default surfaced via `placeholder` so the user sees
+    // "Windfall 1" but the underlying stored label is still "".
+    expect(input.value).toBe("");
+    expect(input.placeholder).toBe("Windfall 1");
+  });
+
+  it("propagates a typed Windfall label to the legend input AND survives a collapse + re-expand round-trip via the chevron", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    await user.click(screen.getByRole("button", { name: /^\+ add windfall$/i }));
+    const card = screen.getByTestId("windfall-card-0");
+
+    const input = within(card).getByRole("textbox", {
+      name: /Edit label, defaults to "Windfall 1"/i
+    }) as HTMLInputElement;
+    await user.click(input);
+    await user.type(input, "Inheritance");
+    expect(input.value).toBe("Inheritance");
+    // The chevron's accessible name reflects the live label so SR users
+    // hear "Collapse Inheritance" / "Expand Inheritance" once the user
+    // has named the card.
+    expect(
+      within(card).getByRole("button", { name: /^Collapse Inheritance$/i })
+    ).toBeInTheDocument();
+
+    // Collapse + re-expand via the chevron — label persists across the
+    // toggle (it lives on `event.label` in the parent state).
+    await user.click(
+      within(card).getByRole("button", { name: /^Collapse Inheritance$/i })
+    );
+    await user.click(
+      within(card).getByRole("button", { name: /^Expand Inheritance$/i })
+    );
+    const reopenedInput = within(card).getByRole("textbox", {
+      name: /Edit label, defaults to "Windfall 1"/i
+    }) as HTMLInputElement;
+    expect(reopenedInput.value).toBe("Inheritance");
+  });
+
+  it("falls back to the auto-numbered placeholder once the user clears a previously-typed label", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    await user.click(
+      screen.getByRole("button", { name: /add real estate investment/i })
+    );
+    const card = screen.getByTestId("re-investment-card-0");
+
+    const input = within(card).getByRole("textbox", {
+      name: /Edit label, defaults to "Real Estate Investment 1"/i
+    }) as HTMLInputElement;
+    await user.click(input);
+    await user.type(input, "Beach house");
+    expect(input.value).toBe("Beach house");
+
+    // Clear the field — chevron aria-label reverts to the auto-numbered
+    // default and the placeholder reappears (stored label is empty).
+    await user.clear(input);
+    expect(input.value).toBe("");
+    expect(input.placeholder).toBe("Real Estate Investment 1");
+    expect(
+      within(card).getByRole("button", {
+        name: /^Collapse Real Estate Investment 1$/i
+      })
+    ).toBeInTheDocument();
+  });
+
+  it("clicking the legend label input on a collapsed card does NOT expand the card (stopPropagation guards the click-to-expand body handler)", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/real estate/i);
+    await user.click(
+      screen.getByRole("button", { name: /^\+ add real estate$/i })
+    );
+    const card = screen.getByTestId("re-holding-card-0");
+
+    // Collapse via chevron first, then click the legend input — the
+    // body click-to-expand handler should NOT fire because the input
+    // calls e.stopPropagation().
+    await user.click(
+      within(card).getByRole("button", { name: /^Collapse Real Estate 1$/i })
+    );
+    expect(within(card).queryByLabelText("Value")).toBeNull();
+
+    const input = within(card).getByRole("textbox", {
+      name: /Edit label, defaults to "Real Estate 1"/i
+    });
+    await user.click(input);
+    // Card stays collapsed: still no Value field, and the chevron
+    // continues to read "Expand …".
+    expect(within(card).queryByLabelText("Value")).toBeNull();
+    expect(
+      within(card).getByRole("button", { name: /^Expand Real Estate 1$/i })
+    ).toBeInTheDocument();
+  });
+
+  it("clicking the pencil edit affordance focuses + selects the legend input (and does NOT expand a collapsed card)", async () => {
+    const user = userEvent.setup();
+    render(<Host />);
+    await expand(/life events/i);
+    await user.click(screen.getByRole("button", { name: /^\+ add new debt$/i }));
+    const card = screen.getByTestId("new-debt-card-0");
+
+    const input = within(card).getByRole("textbox", {
+      name: /Edit label, defaults to "New Debt 1"/i
+    }) as HTMLInputElement;
+    await user.click(input);
+    await user.type(input, "Mortgage");
+
+    // Collapse and click the pencil. Focus moves back to the input
+    // (so the user can immediately start editing) and the selection
+    // covers the entire current value.
+    await user.click(
+      within(card).getByRole("button", { name: /^Collapse Mortgage$/i })
+    );
+    const pencil = within(card).getByRole("button", { name: /^Edit label$/i });
+    await user.click(pencil);
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe("Mortgage".length);
+    // Card remains collapsed: pencil click also stops propagation, so
+    // the body click-to-expand handler does not fire.
+    expect(within(card).queryByLabelText("Principal")).toBeNull();
+  });
+
+  it("seeded plans hydrate custom labels into the legend input on initial render (round-trips through PlanInputs state)", async () => {
+    const seeded: PlanInputs = {
+      ...DEFAULT_PLAN_INPUTS,
+      events: [
+        {
+          ...makeDefaultRealEstateInvestment(),
+          label: "Lake cabin"
+        }
+      ],
+      realEstateHoldings: [
+        {
+          ...makeDefaultRealEstateHolding(),
+          label: "Primary home"
+        }
+      ]
+    };
+    function SeededHost() {
+      const [v, setV] = useState<PlanInputs>(seeded);
+      return (
+        <CurrencyProvider>
+          <PlannerForm value={v} onChange={setV} onReset={vi.fn()} />
+        </CurrencyProvider>
+      );
+    }
+    render(<SeededHost />);
+
+    // Both seeded labels surface in their respective legend inputs
+    // straight away. The aria-label still references the auto-numbered
+    // default (so SR users always know what the field is) but the
+    // value is the user's stored string.
+    await expand(/life events/i);
+    // Anchor the parent-category Real Estate header — the seeded
+    // holding's chevron also matches /real estate/i.
+    await expand(/^Real Estate$/i);
+
+    const reInvestCard = screen.getByTestId("re-investment-card-0");
+    const reInvestInput = within(reInvestCard).getByRole("textbox", {
+      name: /Edit label, defaults to "Real Estate Investment 1"/i
+    }) as HTMLInputElement;
+    expect(reInvestInput.value).toBe("Lake cabin");
+
+    const holdingCard = screen.getByTestId("re-holding-card-0");
+    const holdingInput = within(holdingCard).getByRole("textbox", {
+      name: /Edit label, defaults to "Real Estate 1"/i
+    }) as HTMLInputElement;
+    expect(holdingInput.value).toBe("Primary home");
   });
 });
