@@ -388,6 +388,7 @@ purchase deduction (the asset is already owned). Each carries a stable `id`
 | --- | --- | --- | --- |
 | `id` | string | — | non-empty (uuid in practice) |
 | `type` | literal | — | `"realEstateHolding"` |
+| `label` | string | — | user-customizable card name; default `""`; legacy stored holdings without the field hydrate to `""`; the form renders the auto-numbered `Real Estate N` as a placeholder when empty |
 | `value` | number | currency | ≥ 0 |
 | `appreciationRate` | number | fraction | −0.05 … 0.10 |
 | `annualRentalIncome` | number | currency / year | ≥ 0 (today's money) |
@@ -433,6 +434,7 @@ year 1 onward.
 | --- | --- | --- | --- |
 | `id` | string | — | non-empty (uuid in practice) |
 | `type` | literal | — | `"realEstateInvestment"` |
+| `label` | string | — | user-customizable card name; default `""`; legacy stored events without the field hydrate to `""`; the form renders the auto-numbered `Real Estate Investment N` as a placeholder when empty |
 | `purchaseAmount` | number | currency (today's money by default) | ≥ 0 |
 | `purchaseYear` | number | year | integer |
 | `appreciationRate` | number | fraction | −0.05 … 0.10 |
@@ -456,6 +458,7 @@ value regardless of `inflateAmount`.
 | --- | --- | --- | --- |
 | `id` | string | — | non-empty (uuid in practice) |
 | `type` | literal | — | `"windfall"` |
+| `label` | string | — | user-customizable card name; default `""`; legacy stored events without the field hydrate to `""`; the form renders the auto-numbered `Windfall N` as a placeholder when empty |
 | `amount` | number | currency (today's money by default) | ≥ 0 |
 | `year` | number | year | integer |
 | `inflateAmount` | boolean | — | default `true`; legacy stored events without the field hydrate to `true` |
@@ -483,6 +486,7 @@ new-debt event; the per-event balance is summed into the projection point's
 | --- | --- | --- | --- |
 | `id` | string | — | non-empty (uuid in practice) |
 | `type` | literal | — | `"newDebt"` |
+| `label` | string | — | user-customizable card name; default `""`; legacy stored events without the field hydrate to `""`; the form renders the auto-numbered `New Debt N` as a placeholder when empty |
 | `principal` | number | currency (today's money by default) | ≥ 0 |
 | `interestRate` | number | fraction | 0 … 0.20 |
 | `repaymentType` | enum | — | `"overTime"` \| `"inFine"` |

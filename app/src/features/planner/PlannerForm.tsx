@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import { CurrencyField } from "./CurrencyField";
 import { FramedField } from "./FramedField";
 import { RangeSliderRow } from "./RangeSlider";
@@ -847,6 +847,7 @@ function CollapsiblePill({
   testId,
   summary,
   size,
+  editableTitle,
   children
 }: {
   title: string;
@@ -858,11 +859,27 @@ function CollapsiblePill({
    *  collapsed. Use a ReactNode (e.g. two stacked <div>s) for multi-line. */
   summary?: ReactNode;
   size: "lg" | "sm";
+  /** When provided, the legend renders an editable text input + a
+   *  small pencil button instead of the static toggle button. The
+   *  pill's open/close behaviour shifts to the corner chevron (which
+   *  becomes a real, keyboard-focusable button) and the existing
+   *  click-on-collapsed-body expander. Used by stackable per-card
+   *  pills (Windfall, RE Investment, New Debt, RE Holding) so the
+   *  user can rename each card from its legend. `value` is the stored
+   *  label string (empty = use auto-numbered fallback);
+   *  `defaultLabel` is the auto-numbered text shown as a placeholder
+   *  when `value` is empty. */
+  editableTitle?: {
+    value: string;
+    onChange: (next: string) => void;
+    defaultLabel: string;
+  };
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const panelId = useId();
   const isLg = size === "lg";
+  const labelInputRef = useRef<HTMLInputElement>(null);
 
   // Per-size visual deltas. Behaviour is identical across sizes; only
   // styling changes. Both sizes use the same open/closed vertical
@@ -920,35 +937,98 @@ function CollapsiblePill({
       style={{ borderColor, ["--accent" as string]: accent } as React.CSSProperties}
     >
       <legend className={legendClass} style={{ color: accent }}>
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          aria-controls={panelId}
-          className={legendButtonClass}
-          style={{ color: accent }}
-        >
-          {isLg && icon ? (
-            <span aria-hidden className="inline-flex shrink-0">
-              {icon}
-            </span>
-          ) : null}
-          <span>{title}</span>
-        </button>
+        {editableTitle ? (
+          // Editable legend: text input + pencil affordance. The input
+          // carries `aria-label` so screen readers know what they're
+          // editing; the pencil is a separate button that focuses +
+          // selects the input on click. Both stop click-propagation so
+          // tapping either on a collapsed pill doesn't trigger the
+          // body-level click-to-expand handler (which would steal
+          // focus). Toggle accessibility moves to the corner chevron
+          // below (promoted to a real button when `editableTitle` is
+          // provided).
+          <span className="inline-flex items-center gap-2">
+            <input
+              ref={labelInputRef}
+              type="text"
+              value={editableTitle.value}
+              placeholder={editableTitle.defaultLabel}
+              onChange={(e) => editableTitle.onChange(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === "Escape") {
+                  e.currentTarget.blur();
+                }
+              }}
+              // `field-sizing: content` (CSS Working Draft, Chrome 123+,
+              // Safari 17.4+, Firefox 134+) shrink-wraps the input to
+              // its rendered text so the pencil sits flush against the
+              // label end. The `size=` attribute is the fallback for
+              // older browsers AND for the empty-value case where most
+              // engines size to the placeholder via the `size` rule.
+              size={Math.max(
+                (editableTitle.value || editableTitle.defaultLabel).length,
+                1
+              )}
+              className="rounded-sm border-0 bg-transparent px-0.5 text-[12px] font-semibold tabular-nums outline-none placeholder:opacity-70 hover:bg-[color-mix(in_oklab,var(--accent)_8%,transparent)] focus:underline max-w-[14rem] [field-sizing:content]"
+              style={{ color: accent }}
+              aria-label={`Edit label, defaults to "${editableTitle.defaultLabel}"`}
+            />
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                labelInputRef.current?.focus();
+                labelInputRef.current?.select();
+              }}
+              aria-label="Edit label"
+              className="inline-flex shrink-0 opacity-60 hover:opacity-100"
+              style={{ color: accent }}
+            >
+              <PencilIcon />
+            </button>
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-controls={panelId}
+            className={legendButtonClass}
+            style={{ color: accent }}
+          >
+            {isLg && icon ? (
+              <span aria-hidden className="inline-flex shrink-0">
+                {icon}
+              </span>
+            ) : null}
+            <span>{title}</span>
+          </button>
+        )}
       </legend>
-      {/* Decorative top-right chevron toggle, identical positioning for
-          parent + child pills (Task 3). The legend button above is the
-          keyboard / SR toggle (it carries the title as its accessible
-          name); this chevron is `aria-hidden` and out of the tab order
-          so it doesn't duplicate that name in the accessibility tree.
-          Sub-pills use the small chevron so it stays in proportion to
-          the smaller pill and `text-[12px]` legend; parent pills use
-          the default 14px size to match their `text-sm` legend. */}
+      {/* Top-right chevron toggle. Decorative when the legend itself
+          is the keyboard / SR toggle (parent categories, sub-pills),
+          but promoted to a real focusable button with `aria-expanded`
+          + `aria-label` when the legend is an editable input (per-card
+          pills via `editableTitle`) so keyboard / SR users still have
+          a way to open/close the card. Sub-pills use the small chevron
+          so it stays in proportion to the smaller pill and `text-[12px]`
+          legend; parent pills use the default 14px size to match their
+          `text-sm` legend. */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-hidden="true"
-        tabIndex={-1}
+        aria-hidden={editableTitle ? undefined : "true"}
+        tabIndex={editableTitle ? 0 : -1}
+        aria-expanded={editableTitle ? open : undefined}
+        aria-controls={editableTitle ? panelId : undefined}
+        aria-label={
+          editableTitle
+            ? open
+              ? `Collapse ${editableTitle.value || editableTitle.defaultLabel}`
+              : `Expand ${editableTitle.value || editableTitle.defaultLabel}`
+            : undefined
+        }
         className={`absolute right-3 ${
           isLg ? "top-[-10px]" : "top-[-9px]"
         } inline-flex items-center bg-[var(--surface)] px-1 leading-none focus:outline-none md:right-4`}
@@ -1007,6 +1087,15 @@ function CollapsibleSubsection(props: {
   defaultOpen?: boolean;
   testId: string;
   summary?: ReactNode;
+  /** When provided, the legend renders an editable input + pencil
+   *  button instead of the static toggle. Forwarded verbatim to
+   *  `CollapsiblePill`. Used by the four stackable per-card pills
+   *  (Windfall, RE Investment, New Debt, RE Holding). */
+  editableTitle?: {
+    value: string;
+    onChange: (next: string) => void;
+    defaultLabel: string;
+  };
   children: ReactNode;
 }) {
   return <CollapsiblePill {...props} size="sm" />;
@@ -1027,6 +1116,33 @@ function Chevron({ open, small = false }: { open: boolean; small?: boolean }) {
         fill="none"
         stroke="currentColor"
         strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// Discreet edit affordance shown next to the editable label input on
+// stackable cards (Windfall, Real Estate Investment, New Debt, Real
+// Estate Holding). Sized to the smaller `12px` chevron so it sits in
+// proportion with the sub-pill legend, accent-colored via
+// `currentColor` from the parent button. Static SVG: pencil tip
+// pointing top-right at the writing line.
+function PencilIcon() {
+  return (
+    <svg
+      width={12}
+      height={12}
+      viewBox="0 0 20 20"
+      aria-hidden="true"
+      className="shrink-0"
+    >
+      <path
+        d="M3 17h4l9-9-4-4-9 9v4z M12 4l4 4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -1164,6 +1280,11 @@ function RealEstateInvestmentCard({
       defaultOpen={defaultOpen}
       testId={`re-investment-card-${index}`}
       summary={summarizeRealEstateInvestmentCard(event, inflatedPurchaseAmount, format)}
+      editableTitle={{
+        value: event.label,
+        onChange: (label) => onChange({ label }),
+        defaultLabel: `Real Estate Investment ${index + 1}`
+      }}
     >
       <CurrencyField
         label="Purchase amount"
@@ -1272,6 +1393,11 @@ function WindfallEventCard({
       defaultOpen={defaultOpen}
       testId={`windfall-card-${index}`}
       summary={summarizeWindfallCard(event, inflatedAmount, format)}
+      editableTitle={{
+        value: event.label,
+        onChange: (label) => onChange({ label }),
+        defaultLabel: `Windfall ${index + 1}`
+      }}
     >
       <CurrencyField
         label="Amount"
@@ -1374,6 +1500,11 @@ function NewDebtEventCard({
       accent={accent}
       defaultOpen={defaultOpen}
       testId={`new-debt-card-${index}`}
+      editableTitle={{
+        value: event.label,
+        onChange: (label) => onChange({ label }),
+        defaultLabel: `New Debt ${index + 1}`
+      }}
       // Two-segment collapsed summary: headline (principal + start year)
       // as the value, schedule helper (same text the in-card paragraph
       // shows) as the label, joined by SUMMARY_SEP. CollapsiblePill
@@ -1591,6 +1722,11 @@ function RealEstateHoldingCard({
       defaultOpen={defaultOpen}
       testId={`re-holding-card-${index}`}
       summary={summarizeRealEstateHoldingCard(holding, format)}
+      editableTitle={{
+        value: holding.label,
+        onChange: (label) => onChange({ label }),
+        defaultLabel: `Real Estate ${index + 1}`
+      }}
     >
       <CurrencyField
         label="Value"

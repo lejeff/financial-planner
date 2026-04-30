@@ -85,9 +85,11 @@ describe("loadInputs", () => {
   });
 
   it("preserves a valid stored events array on load", () => {
-    // Stored payload predates the inflateAmount toggle (Task 6) — Zod
-    // applies the schema-level `.default(true)` so the loaded event
-    // carries the historical inflate-to-landing-year behavior.
+    // Stored payload predates the inflateAmount toggle (Task 6) AND the
+    // editable per-card label — Zod applies the schema-level
+    // `.default(true)` and `.default("")` so the loaded event carries
+    // the historical inflate-to-landing-year behavior and an empty
+    // label that the form will render as the auto-numbered fallback.
     const validEvent = {
       id: "abc",
       type: "realEstateInvestment",
@@ -100,7 +102,9 @@ describe("loadInputs", () => {
     const stored = JSON.stringify({ ...DEFAULT_PLAN_INPUTS, events: [validEvent] });
     stubStorage({ "planner.inputs.v1": stored });
 
-    expect(loadInputs().events).toEqual([{ ...validEvent, inflateAmount: true }]);
+    expect(loadInputs().events).toEqual([
+      { ...validEvent, inflateAmount: true, label: "" }
+    ]);
   });
 
   it("preserves a valid stored windfall event on load", () => {
@@ -119,7 +123,9 @@ describe("loadInputs", () => {
     });
     stubStorage({ "planner.inputs.v1": stored });
 
-    expect(loadInputs().events).toEqual([{ ...windfall, inflateAmount: true }]);
+    expect(loadInputs().events).toEqual([
+      { ...windfall, inflateAmount: true, label: "" }
+    ]);
   });
 
   it("preserves a mix of windfall and realEstateInvestment events on load", () => {
@@ -140,8 +146,8 @@ describe("loadInputs", () => {
     stubStorage({ "planner.inputs.v1": stored });
 
     expect(loadInputs().events).toEqual([
-      { ...windfall, inflateAmount: true },
-      { ...reInvestment, inflateAmount: true }
+      { ...windfall, inflateAmount: true, label: "" },
+      { ...reInvestment, inflateAmount: true, label: "" }
     ]);
   });
 
@@ -161,7 +167,9 @@ describe("loadInputs", () => {
     });
     stubStorage({ "planner.inputs.v1": stored });
 
-    expect(loadInputs().events).toEqual([{ ...newDebt, inflateAmount: true }]);
+    expect(loadInputs().events).toEqual([
+      { ...newDebt, inflateAmount: true, label: "" }
+    ]);
   });
 
   it("preserves a mix of all three life event variants on load", () => {
@@ -191,9 +199,9 @@ describe("loadInputs", () => {
     stubStorage({ "planner.inputs.v1": stored });
 
     expect(loadInputs().events).toEqual([
-      { ...windfall, inflateAmount: true },
-      { ...reInvestment, inflateAmount: true },
-      { ...newDebt, inflateAmount: true }
+      { ...windfall, inflateAmount: true, label: "" },
+      { ...reInvestment, inflateAmount: true, label: "" },
+      { ...newDebt, inflateAmount: true, label: "" }
     ]);
   });
 
@@ -248,7 +256,7 @@ describe("loadInputs", () => {
     });
     stubStorage({ "planner.inputs.v1": stored });
 
-    expect(loadInputs().events).toEqual([explicit]);
+    expect(loadInputs().events).toEqual([{ ...explicit, label: "" }]);
   });
 
   it("falls back to [] when stored events array is malformed (keeps other fields)", () => {
@@ -292,7 +300,9 @@ describe("loadInputs", () => {
     });
     stubStorage({ "planner.inputs.v1": stored });
 
-    expect(loadInputs().realEstateHoldings).toEqual([validHolding]);
+    expect(loadInputs().realEstateHoldings).toEqual([
+      { ...validHolding, label: "" }
+    ]);
   });
 
   it("falls back to [] when stored realEstateHoldings is malformed (keeps other fields)", () => {
