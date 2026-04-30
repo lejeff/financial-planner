@@ -29,7 +29,7 @@ export function LandingFooter() {
         <div className="grid gap-12 md:grid-cols-[2fr_1fr_1fr_1fr]">
           {/* Brand column */}
           <div>
-            <Link href="/landing" className="flex items-center gap-3">
+            <Link href="/" className="flex items-center gap-3">
               <LogoMark />
               <span className="font-display text-lg font-semibold text-[var(--navy)]">
                 Financial Planner
@@ -66,7 +66,7 @@ export function LandingFooter() {
             <div className="eyebrow">Product</div>
             <ul className="mt-4 space-y-3 text-sm">
               <li>
-                <Link href="/" className="text-[var(--ink-soft)] hover:text-[var(--navy)] transition-colors">
+                <Link href="/planner" className="text-[var(--ink-soft)] hover:text-[var(--navy)] transition-colors">
                   Planner
                 </Link>
               </li>

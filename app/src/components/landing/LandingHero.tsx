@@ -60,7 +60,7 @@ export function LandingHero() {
           {/* CTA buttons */}
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
-              href="/"
+              href="/planner"
               className="btn-primary text-base px-8 py-3"
             >
               Start planning
