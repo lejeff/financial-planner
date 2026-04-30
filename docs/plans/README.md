@@ -5,7 +5,7 @@ Filenames are prefixed with the date the plan was created.
 
 > For the current roadmap of upcoming work, see [`ROADMAP.md`](../../ROADMAP.md) at the repo root.
 
-**34 plans** across 7 days.
+**35 plans** across 7 days.
 
 ## 2026-04-22
 
@@ -61,3 +61,4 @@ Filenames are prefixed with the date the plan was created.
 
 - [Dual-handle range slider for New Debt loan period](./2026-04-30-new-debt-range-slider.md) — Replace the two single-handle Start year + Loan end year sliders on the New Debt life-event card with one dual-thumb range slider built on `@radix-ui/react-slider`. Two helper lines below the slider preserve the existing principal preview, relative-year text, and inFine label swap. Radix enforces `start <= end` natively; schema in `@app/core` is unchanged so legacy data still loads. First third-party UI primitive in the codebase.
 - [Fold landing into main](./2026-04-30-fold-landing-into-main.md) — Fold the v0 marketing landing into `main` as a hidden, `robots: noindex` preview at `/landing`, leaving the planner untouched at `/`. Per-route chrome is achieved by moving `SiteHeader`/`SiteFooter` out of the root layout into `app/page.tsx`, while the new `/landing` route mounts its own `LandingHeader`/`LandingFooter`. Adds a discreet "Landing preview" link in `SiteFooter`. The `landing-page-mockup` branch (and v0 sandbox worktree) is retired after the fold.
+- [Scrub PL text from landing](./2026-04-30-scrub-pl-text-from-landing.md) — Scrub all verbatim and near-verbatim projectionlab.com copy from `/landing`. Hero adopts the planner hero's voice verbatim ("A calmer way to plan" / "Plan the retirement you actually want."). FeatureShowcase: all 4 blocks rewritten in calm second-person voice. FeatureGrid: pruned from 20 mostly-PL items to 15 grounded in real planner features (incl. 3 added per request — Portfolio growth rates, Real estate appreciation rates, Liquidity warnings — with new `percent` and `bell` icons). Fake-testimonials section removed entirely from the page and `LandingHeader` nav (component file kept for future revival once real quotes exist).
